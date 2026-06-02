@@ -32,7 +32,7 @@ review 阶段只读取和核验，**不修改 goal 原文**。所有修改建议
 
 如果用户给了文件路径，先读文件再评审。如果用户直接贴内容，直接按内容评审。必要时可参考以下文件作为基线，但不要为了"格式一致"而牺牲执行效率：
 
-- 结构基线：`create-goal/SKILL.md`
+- 结构基线：`/Users/haichang/.claude/skills/create-goal/SKILL.md`
 
 ## 核心目标
 
@@ -57,7 +57,7 @@ review 阶段只读取和核验，**不修改 goal 原文**。所有修改建议
 
 ## 对照基线
 
-优先对照 `create-goal/SKILL.md` 的语义结构，而不是机械要求章节同名。重点检查这些信息是否存在且有效：
+优先对照 `/Users/haichang/.claude/skills/create-goal/SKILL.md` 的语义结构，而不是机械要求章节同名。重点检查这些信息是否存在且有效：
 
 - 目标、日期、状态
 - 范围与约束
