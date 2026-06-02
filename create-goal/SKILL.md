@@ -155,7 +155,7 @@ Goal 文档创建完成后，按以下顺序执行。每一步必须等前一步
 
 ### 第一步: 评审与修复
 
-- **命令**: `codex exec --ephemeral --skip-git-repo-check "follow /Users/haichang/.claude/skills/review-goal/SKILL.md to review {goal 文件完整路径}"`
+- **命令**: `codex exec --ephemeral --skip-git-repo-check "follow review-goal/SKILL.md to review {goal 文件完整路径}"`
 - **禁止 fallback**: codex 是唯一的评审执行者，必须等待其完成，不得自行评审或跳过。
 - **修复判断**: 合理的问题直接修复原 goal 文件；不合理的问题不修复，在「变更日志」中记录不采纳原因。
 - **告知用户**: 汇报修复了哪些、跳过了哪些（附理由），提示 review 文件路径。

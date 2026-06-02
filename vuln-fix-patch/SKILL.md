@@ -29,9 +29,9 @@ Before patching, check if upstream (tektoncd/pipeline, fluxcd/*) already fixed t
 
 | Component | File |
 |-----------|------|
-| FluxCD | `/Users/haichang/Projects/BET/deploy/bet-bot/charts/bet-bot-infra/templates/task-fluxcd-build.yaml` |
-| Tekton Pipeline | `/Users/haichang/Projects/BET/deploy/bet-bot/charts/bet-bot-infra/templates/task-tekton-build.yaml` |
-| Base images | `/Users/haichang/Projects/BET/deploy/bet-bot/charts/bet-bot-infra/templates/pipeline-toolchain-build.yaml` |
+| FluxCD | `deploy/bet-bot/charts/bet-bot-infra/templates/task-fluxcd-build.yaml` |
+| Tekton Pipeline | `deploy/bet-bot/charts/bet-bot-infra/templates/task-tekton-build.yaml` |
+| Base images | `deploy/bet-bot/charts/bet-bot-infra/templates/pipeline-toolchain-build.yaml` |
 
 ## Patching Go Dependencies
 
@@ -47,7 +47,7 @@ replace golang.org/x/net => golang.org/x/net v0.33.0
 ## Commit and Deploy
 
 ```bash
-cd /Users/haichang/Projects/BET/deploy/bet-bot
+cd deploy/bet-bot
 git add charts/bet-bot-infra/templates/<modified-files>
 git commit -m "Add go.mod replace directives for <CVE> fixes"
 git push origin hai/bot
