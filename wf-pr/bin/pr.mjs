@@ -10,6 +10,7 @@
 // All output is JSON or concise lines meant for an LLM to act on.
 
 import { execFileSync } from "node:child_process";
+import { writeFileSync, unlinkSync } from "node:fs";
 
 function sh(args, opts = {}) {
   return execFileSync("az", args, { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024, ...opts });
@@ -205,23 +206,29 @@ if (cmd === "create") {
   // Optionally add a reply comment first.
   if (f.comment) {
     const payload = JSON.stringify({ content: f.comment, commentType: "text" });
+    const tmp1 = `/tmp/pr-comment-${Date.now()}.json`;
+    writeFileSync(tmp1, payload);
     sh([
       "devops", "invoke",
       "--area", "git", "--resource", "pullRequestThreadComments",
       "--route-parameters", `project=${project}`, `repositoryId=${repoId}`, `pullRequestId=${prId}`, `threadId=${threadId}`,
-      "--http-method", "POST", "--in-file", "/dev/stdin",
+      "--http-method", "POST", "--in-file", tmp1,
       "--org", org, "--api-version", "7.1", "--output", "none",
-    ], { input: payload });
+    ]);
+    unlinkSync(tmp1);
   }
   // Set thread status to fixed (resolved).
   const payload = JSON.stringify({ status: "fixed" });
+  const tmp2 = `/tmp/pr-resolve-${Date.now()}.json`;
+  writeFileSync(tmp2, payload);
   sh([
     "devops", "invoke",
     "--area", "git", "--resource", "pullRequestThreads",
     "--route-parameters", `project=${project}`, `repositoryId=${repoId}`, `pullRequestId=${prId}`, `threadId=${threadId}`,
-    "--http-method", "PATCH", "--in-file", "/dev/stdin",
+    "--http-method", "PATCH", "--in-file", tmp2,
     "--org", org, "--api-version", "7.1", "--output", "none",
-  ], { input: payload });
+  ]);
+  unlinkSync(tmp2);
   console.log(`resolved thread ${threadId} on PR ${prId}`);
 } else {
   console.error("usage: pr.mjs create|status|comments|resolve ...");
