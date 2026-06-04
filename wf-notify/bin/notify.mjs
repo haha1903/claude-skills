@@ -46,6 +46,10 @@ async function addNotification(f) {
     try { body.autoCheck = JSON.parse(f["auto-check"]); }
     catch { console.error("--auto-check must be valid JSON"); process.exit(1); }
   }
+  if (f["check-params"]) {
+    try { body.checkParams = JSON.parse(f["check-params"]); }
+    catch { console.error("--check-params must be valid JSON"); process.exit(1); }
+  }
   const r = await fetch(`${GATEWAY}/api/notifications`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
