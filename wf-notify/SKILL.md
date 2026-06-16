@@ -34,18 +34,24 @@ bin/notify.mjs add --title "Check PoP for PR #12345" \
 
 Prints `notification created: <id>` — keep the id if you'll close it later.
 
-## Closing a notification you raised
+## Listing and closing notifications
 
-When you detect the condition is satisfied (e.g. you found the PR is merged),
-close the notification so the user doesn't have to:
+List this task's open notifications (id, status, kind, title — tab-separated):
 ```
-curl -s -X POST http://localhost:4567/api/notifications/<id>/done
+bin/notify.mjs list --task "<task-name>"
+```
+Add `--all` to include already-closed ones. Omit `--task` to list everything.
+
+When you detect a notification's condition is satisfied (e.g. you ran
+`wf-release status` and the PR is merged / the approval gate passed), close it
+so the user doesn't have to:
+```
+bin/notify.mjs done <id>
 ```
 
-To find the id again, list them:
-```
-curl -s http://localhost:4567/api/notifications | python3 -c "import json,sys;[print(n['id'],n['status'],n['title']) for n in json.load(sys.stdin)['notifications']]"
-```
+This is the backbone of a `notification-hygiene` heartbeat check: `list --task`
+to see what's still open, verify each against the real world, `done <id>` the
+ones whose reason is moot.
 
 ## Rules
 
