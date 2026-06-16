@@ -13,8 +13,9 @@ that URL (or the buildId) here to check progress.
 
 Same az devops auth as wf-pr (dev.azure.com/msazure).
 
-## Command
+## Commands
 
+### status — one build's detail
 ```
 bin/release.mjs status <buildId | build-results-URL>
 ```
@@ -26,6 +27,29 @@ bin/release.mjs status "https://dev.azure.com/msazure/One/_build/results?buildId
 - `status`: notStarted | inProgress | completed
 - `result`: succeeded | partiallySucceeded | failed | canceled (null while running)
 - `stages`: per-stage breakdown so you can see how far a running/failed release got.
+
+### runs — list recent runs of a pipeline (candidates)
+```
+bin/release.mjs runs <pipelineId>
+```
+→ `{ pipelineId, count, runs: [{ id, buildNumber, status, result, reason, branch, queueTime }] }`
+sorted newest-first, with any `inProgress` runs merged in.
+
+Use this when you only know the **pipeline id** and need to find a specific run
+— e.g. "did someone trigger the release-enabled run yet?". It does NOT guess
+which run is the one you want: scheduled (build-only) and manual
+(release-enabled) runs interleave, so the newest run is often NOT the release.
+**You** pick the right one using task context (when you/the user triggered it,
+`reason: manual` vs `schedule`, whether it's still `inProgress`).
+
+**Do NOT hand-roll `az pipelines runs list --top N`.** That command's default
+ordering isn't reliably newest-first, and `--top N` can truncate an in-progress
+run right off the list — silently hiding a build that was already triggered.
+`runs` merges inProgress explicitly and sorts by queueTime.
+
+To confirm a candidate is actually **release-enabled** (not build-only), feed
+its id to `status` and check the Prod/Release stage: a build-only run shows that
+stage as `result: skipped`; a release run runs it.
 
 ## ev2 rollout — NOT polled here
 

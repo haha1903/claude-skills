@@ -4,7 +4,8 @@
 // notification emails). org/project are taken from the URL, else default to
 // msazure/One.
 //
-//   release.mjs status <buildId | build-results-URL>
+//   release.mjs status <buildId | build-results-URL>   # status of one build
+//   release.mjs runs <pipelineId>                       # recent runs of a pipeline (candidates to pick from)
 //
 // ev2 rollout completion is NOT polled here — it arrives by email (the rollout
 // email carries the link + status). This skill answers "did the pipeline /
@@ -15,6 +16,34 @@ import { execFileSync } from "node:child_process";
 
 function sh(args) {
   return execFileSync("az", args, { encoding: "utf-8", maxBuffer: 32 * 1024 * 1024 });
+}
+
+const ORG = "https://dev.azure.com/msazure";
+const PROJECT = "One";
+
+// List recent runs of a pipeline as CANDIDATES — we do NOT guess which one is
+// "the release run". Scheduled (build-only) and manual (release-enabled) runs
+// interleave, and a run still in flight may sort anywhere, so picking "the
+// latest" is wrong. Instead return the recent runs (inProgress ones merged in
+// explicitly, since `--top N` ordering can truncate them off) sorted newest
+// first, with reason/status/result, and let the caller decide using task
+// context (when they triggered it, manual vs schedule, etc). Feed the chosen
+// id to `status` for per-stage detail (the Prod/Release stage being non-skipped
+// is the real signal that a run is release-enabled).
+function listRuns(pipelineId) {
+  const base = ["pipelines", "runs", "list", "--pipeline-ids", pipelineId,
+    "--org", ORG, "--project", PROJECT, "--output", "json"];
+  const pick = (r) => ({
+    id: r.id, buildNumber: r.name, status: r.status, result: r.result,
+    reason: r.reason, branch: r.sourceBranch, queueTime: r.queueTime,
+  });
+  const byId = new Map();
+  for (const r of JSON.parse(sh([...base, "--top", "15"]))) byId.set(r.id, r);
+  // Merge inProgress explicitly — they can fall outside the --top window.
+  for (const r of JSON.parse(sh([...base, "--status", "inProgress"]))) byId.set(r.id, r);
+  return [...byId.values()]
+    .map(pick)
+    .sort((a, b) => String(b.queueTime).localeCompare(String(a.queueTime)));
 }
 
 function parseTarget(arg) {
@@ -38,8 +67,14 @@ function parseTarget(arg) {
 const argv = process.argv.slice(2);
 const cmd = argv[0];
 
+if (cmd === "runs" && argv[1]) {
+  const runs = listRuns(argv[1].replace(/\D/g, ""));
+  console.log(JSON.stringify({ pipelineId: Number(argv[1].replace(/\D/g, "")), count: runs.length, runs }, null, 2));
+  process.exit(0);
+}
+
 if (cmd !== "status" || !argv[1]) {
-  console.error("usage: release.mjs status <buildId | build-results-URL>");
+  console.error("usage: release.mjs status <buildId | build-results-URL>  |  release.mjs runs <pipelineId>");
   process.exit(1);
 }
 
