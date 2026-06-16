@@ -85,18 +85,39 @@ const build = JSON.parse(sh([
   "--org", org, "--project", project, "--output", "json",
 ]));
 
-// Stage-level results from the timeline.
+// Stage-level results + approval signal from the timeline.
 let stages = [];
+let approval = { state: "unknown", note: "no Approval phase/task in timeline yet" };
 try {
   const tl = JSON.parse(sh([
     "devops", "invoke", "--area", "build", "--resource", "Timeline",
     "--route-parameters", `project=${project}`, `buildId=${buildId}`,
     "--org", org, "--api-version", "7.0", "--output", "json",
   ]));
-  stages = (tl.records || [])
+  const records = tl.records || [];
+  stages = records
     .filter((r) => r.type === "Stage")
     .sort((a, b) => (a.order || 0) - (b.order || 0))
     .map((r) => ({ name: r.name, state: r.state, result: r.result }));
+
+  // Approval status comes from manual-validation records, NOT from a stage
+  // being inProgress. A stage can be inProgress because its rollout/monitoring
+  // is running AFTER approval already passed — keying "waiting for approval"
+  // off stage state is wrong. The real signal is the "Waiting for Approval" /
+  // "Approval" phase|task records (and "Request Approved" once granted).
+  const isApprovalRec = (r) => /\bapproval\b|waiting for approval|request approved/i.test(r.name || "");
+  const apprRecs = records.filter(isApprovalRec);
+  if (apprRecs.length > 0) {
+    const pending = apprRecs.find((r) => r.state === "inProgress" || r.state === "pending");
+    if (pending) {
+      approval = { state: "pending", note: `waiting at: ${pending.name}` };
+    } else {
+      const granted = apprRecs.some((r) => /request approved/i.test(r.name || "") || (/\bapproval\b/i.test(r.name || "") && r.result === "succeeded"));
+      approval = granted
+        ? { state: "approved", note: "approval phase/task completed" }
+        : { state: "unknown", note: "approval records present but state unclear" };
+    }
+  }
 } catch (e) {
   stages = [{ name: "(timeline fetch failed)", state: String(e.message).slice(0, 120) }];
 }
@@ -108,6 +129,7 @@ console.log(JSON.stringify({
   buildNumber: build.buildNumber,
   status: build.status,       // notStarted | inProgress | completed | ...
   result: build.result,       // succeeded | partiallySucceeded | failed | canceled (null while running)
+  approval,                   // { state: pending|approved|unknown, note } — derived from manual-validation records, NOT stage state
   branch: build.sourceBranch,
   finishTime: build.finishTime,
   url,
