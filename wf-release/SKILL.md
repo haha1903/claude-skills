@@ -42,10 +42,11 @@ which run is the one you want: scheduled (build-only) and manual
 **You** pick the right one using task context (when you/the user triggered it,
 `reason: manual` vs `schedule`, whether it's still `inProgress`).
 
-**Do NOT hand-roll `az pipelines runs list --top N`.** That command's default
-ordering isn't reliably newest-first, and `--top N` can truncate an in-progress
-run right off the list — silently hiding a build that was already triggered.
-`runs` merges inProgress explicitly and sorts by queueTime.
+**NEVER hand-roll `az pipelines runs list` (with or without `--top N`).** Its
+default ordering isn't reliably newest-first, and `--top N` truncates
+in-progress runs right off the list — silently hiding a build that was already
+triggered. This bug has bitten real workflow tasks. Always use `runs`, which
+merges inProgress explicitly and sorts by queueTime.
 
 To confirm a candidate is actually **release-enabled** (not build-only), feed
 its id to `status` and check the Prod/Release stage: a build-only run shows that
