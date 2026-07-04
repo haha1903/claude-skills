@@ -13,15 +13,21 @@ import json
 import subprocess
 import sys
 
-from ado_lib import (
+from msapi.boards import (
     FeatureMap,
-    log_to_file, error_exit, set_debug,
     get_work_item_type, get_type_from_id, get_parent_info,
     get_iteration_path, create_work_item, update_state, set_completed_work,
-    generate_with_ai, parse_ai_response,
 )
+from msapi.log import log_to_file, error_exit, set_debug
+from msapi.aigen import generate_with_ai, parse_ai_response
 
 LOG_FILE = "/tmp/wf-wi.log"
+
+# Lionrock work-item defaults (were ado_lib/config.py; msapi keeps no personal
+# config, so the caller supplies these).
+ASSIGNED_TO = "haichang"
+LIONROCK_AREA_ROOT = r"One\Azure\Core\Buildout and Decomm\GeoExpansion\Lionrock"
+FEATURE_TAG = "CI"
 
 # Same prompt cpr uses, kept inline so a host-side cpr edit doesn't drift this
 # tool. If you change cpr's prompt and want this tool to follow, copy it here.
@@ -115,7 +121,7 @@ def main():
     target = args.target or detect_default_branch()
     log_to_file(f"target branch: {target}", LOG_FILE)
 
-    feature_map = FeatureMap()
+    feature_map = FeatureMap(LIONROCK_AREA_ROOT, FEATURE_TAG)
     feature_map.load()
 
     # If parent is numeric, derive type from it (Feature -> PBI, PBI -> Task).
@@ -169,7 +175,7 @@ def main():
 
     new_id = create_work_item(
         title=title, wi_type=wi_type, iteration=iteration,
-        parent_id=parent_id, area_path=area_path,
+        parent_id=parent_id, area_path=area_path, assigned_to=ASSIGNED_TO,
         description=description, debug=args.debug, log_file=LOG_FILE,
     )
     if completed_work:

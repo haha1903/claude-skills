@@ -5,16 +5,16 @@ description: Create an Azure DevOps work item from a git diff for tasks-gateway 
 
 # wf-wi
 
-Non-interactive work-item creation for workflow tasks. Wraps the host's
-ado_lib (~/bin/ado_lib mounted at /opt/ado_lib in the container) so cpr's
-AI-generation logic is reused without any prompt-for-confirmation step.
+Non-interactive work-item creation for workflow tasks. Uses the shared `msapi`
+library (`msapi.boards` for work items, `msapi.aigen` for AI generation) so
+cpr's AI-generation logic is reused without any prompt-for-confirmation step.
 
 ## Prerequisite
 
 - `az` authenticated for Azure DevOps on dev.azure.com/msazure (same as wf-pr).
 - Run from inside the worktree of the BET repo (or any repo whose changes
   define the diff). The skill reads `git diff <target>..HEAD` to feed the AI.
-- ado_lib importable on PYTHONPATH (already configured in the container).
+- `msapi` importable (pip-installed in the container; `pip install -e ~/Projects/msapi` locally).
 
 ## Command
 

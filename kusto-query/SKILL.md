@@ -1,6 +1,6 @@
 ---
 name: kusto-query
-description: Use when querying Azure Data Explorer (Kusto) clusters — covers authentication via Azure CLI token, REST API query/management endpoints, and the kusto_helper.py utility in scripts/
+description: Use when querying Azure Data Explorer (Kusto) clusters — covers authentication via Azure CLI token, REST API query/management endpoints, and the msapi.kusto helper (scripts/kusto_helper.py is a compat shim re-exporting it)
 ---
 
 # Kusto Query
@@ -36,12 +36,16 @@ curl -s -X POST "https://CLUSTER.REGION.kusto.windows.net/v1/rest/mgmt" \
 ```
 Response: `{ "Tables": [{ "Columns": [...], "Rows": [...] }] }`
 
-## kusto_helper.py
+## msapi.kusto
 
-Location: `scripts/kusto_helper.py`. Uses `az cli` + `curl` (avoids Python SSL issues).
+The implementation lives in the shared `msapi` library (`pip install -e
+~/Projects/msapi`). Uses `az cli` + `curl` (avoids Python SSL issues). The old
+`scripts/kusto_helper.py` is now a compatibility shim that re-exports from
+`msapi.kusto`, so existing `from kusto_helper import …` importers keep working —
+but new code should import from `msapi.kusto`.
 
 ```python
-from kusto_helper import query_kusto, mgmt_kusto, list_tables, show_schema, print_results
+from msapi.kusto import query_kusto, mgmt_kusto, list_tables, show_schema, print_results
 
 # KQL query — returns (cols, rows) where rows is list of dicts
 cols, rows = query_kusto("https://CLUSTER.REGION.kusto.windows.net", "DB", "Table | take 10")
@@ -96,7 +100,7 @@ When exploring an unknown cluster:
 
 ```python
 #!/usr/bin/env python3
-from kusto_helper import query_kusto, mgmt_kusto, list_tables, show_schema, print_results
+from msapi.kusto import query_kusto, mgmt_kusto, list_tables, show_schema, print_results
 
 CLUSTER = "https://CLUSTER.REGION.kusto.windows.net"
 
