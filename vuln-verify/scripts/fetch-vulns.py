@@ -21,17 +21,19 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-# Reuse the kusto-query skill's helper (az cli + curl, no SDK).
-KUSTO_SKILL_SCRIPTS = Path.home() / ".claude" / "skills" / "kusto-query" / "scripts"
-sys.path.insert(0, str(KUSTO_SKILL_SCRIPTS))
-from kusto_helper import query_kusto, print_results  # noqa: E402
+# Kusto access via the shared msapi library (pip install -e ~/Projects/msapi).
+from msapi.kusto import query_kusto, print_results
 
 CLUSTER_URL = "https://shavulnmgmtprdwus.westus2.kusto.windows.net"
 DATABASE = "ShaS360"
 DEFAULT_OWNER = "66fc1dd2-fca0-43fe-a29e-e5019a29e949"
 
 # NOTE: keep the query stable with the one in the S360 portal so results match.
+# `set deferpartialqueryfailures = true;` keeps the query returning rows even
+# when one of the underlying sources times out — the S360 cluster has been
+# flaky and otherwise we get a single `OneApiErrors` row instead of data.
 QUERY_TEMPLATE = r"""
+set deferpartialqueryfailures = true;
 GetUnifiedS360ActionDetails
 (
     _Filter_RemediationOwner= dynamic(['{owner}'])
