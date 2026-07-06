@@ -15,7 +15,10 @@ what was asked (fuel for future insight pages).
 
 ## Where the wiki is
 
-`WIKI_ROOT/<wiki-name>/` — an absolute path already given in your task prompt.
+`WIKI_ROOT/<wiki-name>/`. Resolve `WIKI_ROOT` in this order: the path named in
+your task prompt, else the `WIKI_ROOT` environment variable, else the default
+`~/Projects/wiki`. (The `log-query.py` helper applies the same default, so a
+plain local run without `WIKI_ROOT` set just works.)
 Each wiki has `index.md` (navigation), `summaries/`, `concepts/`, `entities/`,
 and `raw/` (immutable sources).
 
