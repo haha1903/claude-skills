@@ -1,13 +1,33 @@
 ---
 name: kusto-query
-description: Use when querying Azure Data Explorer (Kusto) clusters — covers authentication via Azure CLI token, REST API query/management endpoints, and the msapi.kusto helper (scripts/kusto_helper.py is a compat shim re-exporting it)
+description: Use when querying Azure Data Explorer (Kusto) clusters — covers the iris bin (bin/query.mjs), Azure CLI token auth, and the raw REST query/management endpoints as a fallback
 ---
 
 # Kusto Query
 
 ## Overview
 
-Query any Azure Data Explorer (Kusto) cluster using Azure CLI token authentication and REST API. No SDK needed — just `az cli` + `curl`.
+Query any Azure Data Explorer (Kusto) cluster with the signed-in `az` user's token. The primary path is the iris bin below; the raw `curl` REST calls are kept as a fallback for ad-hoc use.
+
+## Run a query (primary path)
+
+```bash
+# KQL query
+node ~/.claude/skills/kusto-query/bin/query.mjs \
+  https://CLUSTER.REGION.kusto.windows.net DATABASE "TableName | take 10"
+
+# Management command
+node ~/.claude/skills/kusto-query/bin/query.mjs --mgmt \
+  https://CLUSTER.REGION.kusto.windows.net DATABASE ".show tables"
+```
+
+Output is JSON `{cols, rows}` (pipe to `jq`). Auth is the signed-in `az` user — run `az login` first, and connect the VPN for internal clusters. The bin calls the iris SDK (`kusto.queryKusto` / `kusto.mgmtKusto`) through `_iris-shared`, auto-building iris on first run.
+
+> The Python helper `scripts/kusto_helper.py` (re-exporting `msapi.kusto`) is
+> retained for skills that still import it (e.g. icm-query) and will move to iris
+> when the icm module migrates. New code should use the bin above.
+
+## Raw REST (fallback)
 
 ## Authentication
 
@@ -36,33 +56,12 @@ curl -s -X POST "https://CLUSTER.REGION.kusto.windows.net/v1/rest/mgmt" \
 ```
 Response: `{ "Tables": [{ "Columns": [...], "Rows": [...] }] }`
 
-## msapi.kusto
+## Python helper (legacy, for icm-query only)
 
-The implementation lives in the shared `msapi` library (`pip install -e
-~/Projects/msapi`). Uses `az cli` + `curl` (avoids Python SSL issues). The old
-`scripts/kusto_helper.py` is now a compatibility shim that re-exports from
-`msapi.kusto`, so existing `from kusto_helper import …` importers keep working —
-but new code should import from `msapi.kusto`.
-
-```python
-from msapi.kusto import query_kusto, mgmt_kusto, list_tables, show_schema, print_results
-
-# KQL query — returns (cols, rows) where rows is list of dicts
-cols, rows = query_kusto("https://CLUSTER.REGION.kusto.windows.net", "DB", "Table | take 10")
-
-# Management command
-cols, rows = mgmt_kusto(CLUSTER_URL, "DB", ".show tables")
-
-# List all tables in a database
-tables = list_tables(CLUSTER_URL, "DB")  # returns list of dicts with 'TableName'
-
-# Show table schema
-columns = show_schema(CLUSTER_URL, "DB", "TableName")
-# Returns: [{"Name": "col", "CslType": "string"}, ...]
-
-# Pretty-print
-print_results(cols, rows, "Optional Title")
-```
+`scripts/kusto_helper.py` re-exports `msapi.kusto` (`query_kusto` / `mgmt_kusto` /
+`list_tables` / `show_schema`). It is retained only because `icm-query` still
+imports it; it moves to iris when the icm module migrates. Do not write new code
+against it — use `bin/query.mjs` above.
 
 ## Common Management Commands
 
@@ -96,30 +95,21 @@ cluster('other.region.kusto.windows.net').database('DB').Table | take 10
 
 ## Exploration Template
 
-When exploring an unknown cluster:
+When exploring an unknown cluster, run these with the bin (pipe through `jq`):
 
-```python
-#!/usr/bin/env python3
-from msapi.kusto import query_kusto, mgmt_kusto, list_tables, show_schema, print_results
-
-CLUSTER = "https://CLUSTER.REGION.kusto.windows.net"
+```bash
+C=https://CLUSTER.REGION.kusto.windows.net
+Q=~/.claude/skills/kusto-query/bin/query.mjs
 
 # 1. Discover databases
-cols, rows = mgmt_kusto(CLUSTER, "NetDefaultDB", ".show databases")
-print_results(cols, rows, "Databases")
+node $Q --mgmt $C NetDefaultDB ".show databases" | jq '.rows[].DatabaseName'
 
 # 2. List tables
-tables = list_tables(CLUSTER, "DATABASE")
-for t in tables:
-    print(t.get("TableName"))
+node $Q --mgmt $C DATABASE ".show tables" | jq '.rows[].TableName'
 
 # 3. Schema + sample for a table
-schema = show_schema(CLUSTER, "DATABASE", "TableName")
-for col in schema:
-    print(f"  {col['Name']:35} {col['CslType']}")
-
-cols, rows = query_kusto(CLUSTER, "DATABASE", "TableName | take 3")
-print_results(cols, rows, "Sample")
+node $Q --mgmt $C DATABASE ".show table TableName schema as json" | jq '.rows[0].Schema | fromjson | .OrderedColumns'
+node $Q $C DATABASE "TableName | take 3" | jq
 ```
 
 ## Troubleshooting
@@ -127,4 +117,4 @@ print_results(cols, rows, "Sample")
 - **Token failed:** Run `az login` first, or check cluster URL spelling
 - **Empty response:** Cluster may not exist at that address — try different region suffixes
 - **Permission denied:** Need "Database Viewer" role on the target database
-- **Timeout:** Add `timeout` parameter: `query_kusto(..., timeout=180)`
+- **Timeout:** the bin defaults to a 120s timeout; for heavier queries call the SDK directly with a larger `timeout` argument
