@@ -1,0 +1,77 @@
+#!/usr/bin/env node
+/**
+ * Get EV2 rollout status with action-level errors (via iris ev2).
+ *
+ *   ev2-rollout <rolloutId> [--service-group=...|-g ...] [--infra=int|prod|-i ...] [--raw]
+ *
+ * Defaults to BET Int Bootstrap if --service-group not given. --raw dumps full
+ * JSON; otherwise a summary with running + failed actions (ErrorCode/ErrorReason/
+ * HelpLink + non-succeeded resourceOperations).
+ */
+import { ev2 } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+function opt(long, short, def) {
+  const eq = argv.find((a) => a.startsWith(`--${long}=`));
+  if (eq) return eq.slice(long.length + 3);
+  const i = argv.findIndex((a) => a === `--${long}` || a === `-${short}`);
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : def;
+}
+const rolloutId = argv.find((a) => !a.startsWith("-"));
+if (!rolloutId) { console.error("usage: ev2-rollout <rolloutId> [--service-group=...] [--infra=int|prod] [--raw]"); process.exit(2); }
+const serviceGroup = opt("service-group", "g", "Microsoft.AzureGlobal.BuildoutAutomation.BET.Int.Bootstrap");
+const infra = opt("infra", "i", "int");
+const raw = argv.includes("--raw");
+
+const d = await ev2.fetchRollout(rolloutId, serviceGroup, infra);
+if (raw) { console.log(JSON.stringify(d, null, 2)); process.exit(0); }
+
+const op = d.RolloutOperationInfo || {};
+console.log(`Rollout: ${rolloutId}`);
+console.log(`Status:  ${d.Status}`);
+console.log(`Started: ${op.StartTime ?? ""}`);
+if (op.EndTime) console.log(`Ended:   ${op.EndTime}`);
+console.log(`Failed mitigable actions: ${op.FailedMitigableActions ?? 0}`);
+console.log();
+
+// Walk actions once for the detailed summary (raw access to Messages/ResourceOperations).
+const running = [];
+const failed = [];
+let succeeded = 0;
+for (const rg of d.ResourceGroups ?? []) {
+  for (const res of rg.Resources ?? []) {
+    for (const act of res.Actions ?? []) {
+      const st = act.Status;
+      if (st === "Failed") failed.push(act);
+      else if (st === "Running" || st === "Accepted" || st === "InProgress") running.push(act);
+      else if (st === "Succeeded") succeeded++;
+    }
+  }
+}
+console.log(`Actions: ${succeeded} succeeded, ${running.length} running, ${failed.length} failed`);
+console.log();
+
+if (running.length) {
+  console.log("=== Running ===");
+  for (const act of running) console.log(`  [${act.Status}] ${act.StepName} / ${act.Name}`);
+  console.log();
+}
+
+if (failed.length) {
+  console.log("=== FAILED ACTIONS ===");
+  for (const act of failed) {
+    console.log(`\n  x ${act.StepName} / ${act.Name}`);
+    const err = (act.ActionOperationInfo || {}).ErrorInfo || {};
+    if (err.ErrorCode) {
+      console.log(`    ErrorCode:   ${err.ErrorCode}`);
+      for (const line of String(err.ErrorReason ?? "").split("\n")) console.log(`    | ${line}`);
+      if (err.HelpLink) console.log(`    HelpLink:    ${err.HelpLink}`);
+    }
+    for (const m of act.Messages ?? []) console.log(`    msg: ${m.Message}`);
+    for (const rop of act.ResourceOperations ?? []) {
+      if (rop.ProvisioningState && rop.ProvisioningState !== "Succeeded") {
+        console.log(`    resource ${rop.ResourceName}: ${rop.ProvisioningState} ${rop.StatusMessage ?? ""}`);
+      }
+    }
+  }
+}

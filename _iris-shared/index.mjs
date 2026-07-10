@@ -26,5 +26,6 @@ export const auth = mod.auth;
 export const azcli = mod.azcli;
 export const kusto = mod.kusto;
 export const icm = mod.icm;
+export const ev2 = mod.ev2;
 export const bridge = mod.bridge;
 export const log = mod.log;

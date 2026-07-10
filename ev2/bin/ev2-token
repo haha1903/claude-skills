@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+/**
+ * Print an EV2 mgmt API access token (via iris ev2.rolloutToken).
+ *
+ *   ev2-token [int|prod]   (default: int)
+ *
+ * Reads cert/client/tenant from ~/.ev2/config.yaml's Test(int)/Prod profile.
+ * Cached 50min in /tmp/ev2-token-{infra}.cache.
+ */
+import fs from "node:fs";
+import { ev2 } from "../../_iris-shared/index.mjs";
+
+const infra = (process.argv[2] || "int").toLowerCase();
+const cache = `/tmp/ev2-token-${infra}.cache`;
+try {
+  const st = fs.statSync(cache);
+  if (Date.now() - st.mtimeMs < 3000 * 1000) { process.stdout.write(fs.readFileSync(cache, "utf-8")); process.exit(0); }
+} catch { /* no cache yet */ }
+
+const tok = await ev2.rolloutToken(infra);
+fs.writeFileSync(cache, tok, { mode: 0o600 });
+process.stdout.write(tok);
