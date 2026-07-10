@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+/**
+ * Export an on-call schedule (IcM team 67250, Region Access & Quota) to a shared
+ * state file the teams-listener container reads (~/.pi/gateway bind-mounted), or
+ * print it. Thin wrapper over iris icm.oncallWindows. Needs icm token (kubectl
+ * into bet-prod), host-only.
+ *
+ *   oncall-check            # fetch, write state file, print summary
+ *   oncall-check --print    # print JSON, don't write
+ */
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { icm } from "../../_iris-shared/index.mjs";
+
+const ME = os.userInfo().username;
+const TEAM_ID = 67250; // Region Access & Quota
+const DAYS = 31;
+const STATE_FILE = path.join(os.homedir(), ".pi/gateway/oncall-state.json");
+
+const result = await icm.oncallWindows(TEAM_ID, ME, { days: DAYS });
+
+if (process.argv.slice(2).includes("--print")) {
+  console.log(JSON.stringify(result));
+  process.exit(0);
+}
+
+fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+const tmp = `${STATE_FILE}.tmp`;
+fs.writeFileSync(tmp, JSON.stringify(result) + "\n");
+fs.renameSync(tmp, STATE_FILE);
+
+console.log(`onCall now: ${result.onCall}  (${result.windows.length} windows over next ${DAYS}d)`);

@@ -1,0 +1,35 @@
+#!/usr/bin/env node
+/**
+ * Bulk-add discussion comments to many IcM incidents (thin wrapper over iris
+ * icm.commentMany). WRITE OP. Concurrent; IcM has no $batch so this is client-side.
+ *
+ *   icm-comment-many "<text>" <id> [<id> ...]   # same text to many ids
+ *   icm-comment-many "<text>" -                  # same text; ids from stdin
+ *   icm-comment-many --map <file.json>           # {"<id>": "<text>", ...} per-incident
+ *
+ * Prints a JSON summary {ok:[...], failed:[{item,error}]}.
+ */
+import fs from "node:fs";
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+let mapping;
+if (argv.length >= 2 && argv[0] === "--map") {
+  const raw = JSON.parse(fs.readFileSync(argv[1], "utf-8"));
+  mapping = Object.fromEntries(Object.entries(raw).map(([k, v]) => [String(k), v]));
+} else if (argv.length >= 2) {
+  const text = argv[0];
+  const rest = argv.slice(1);
+  const idsRaw = rest.length === 1 && rest[0] === "-" ? fs.readFileSync(0, "utf-8").split(/\s+/) : rest;
+  const ids = idsRaw.map((s) => s.trim()).filter(Boolean);
+  mapping = Object.fromEntries(ids.map((i) => [i, text]));
+} else {
+  console.error('usage: icm-comment-many "TEXT" ID [ID ...]   |   --map FILE.json');
+  process.exit(2);
+}
+
+if (!Object.keys(mapping).length) { console.error("no incident ids given"); process.exit(2); }
+
+const res = await icm.commentMany(mapping);
+console.log(JSON.stringify(res, null, 2));
+if (res.failed.length) process.exit(1);

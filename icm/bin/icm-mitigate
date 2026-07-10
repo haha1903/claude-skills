@@ -1,0 +1,19 @@
+#!/usr/bin/env node
+/**
+ * Mitigate an IcM incident (thin wrapper over iris icm.mitigate). WRITE OP.
+ *
+ *   icm-mitigate <ID> "<mitigation reason>"
+ *
+ * Optional env: ICM_CONTACT_ALIAS (default: current user), ICM_HOW_FIXED (default: ByDesign)
+ */
+import os from "node:os";
+import { icm } from "../../_iris-shared/index.mjs";
+
+const [incidentId, reason] = process.argv.slice(2);
+if (!incidentId || !reason) { console.error('usage: icm-mitigate ID "REASON"'); process.exit(2); }
+
+const contactAlias = process.env.ICM_CONTACT_ALIAS || os.userInfo().username;
+const howFixed = process.env.ICM_HOW_FIXED || "ByDesign";
+
+const res = await icm.mitigate(incidentId, reason, { contactAlias, howFixed });
+console.log(typeof res === "string" ? res : JSON.stringify(res, null, 2));

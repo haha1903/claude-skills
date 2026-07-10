@@ -1,0 +1,20 @@
+#!/usr/bin/env node
+/**
+ * Add a discussion comment to an IcM incident (thin wrapper over iris
+ * icm.addComment). WRITE OP. A comment is written via EditIncident (PATCH incident
+ * with NewDescriptionEntry) — IcM has no dedicated add-comment action.
+ *
+ *   icm-comment <id> "<text>"      # text as arg
+ *   icm-comment <id> -             # text from stdin
+ */
+import fs from "node:fs";
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 2) { console.error('usage: icm-comment ID "TEXT"   (or ID - for stdin)'); process.exit(2); }
+const iid = argv[0];
+const text = argv[1] === "-" ? fs.readFileSync(0, "utf-8") : argv[1];
+if (!text.trim()) { console.error("empty comment text"); process.exit(2); }
+
+await icm.addComment(iid, text);
+console.log(`added comment to ${iid} (${text.length} chars)`);

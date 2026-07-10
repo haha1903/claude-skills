@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+/**
+ * Assign an IcM incident to an individual (thin wrapper over iris icm.assign).
+ * WRITE OP.
+ *
+ * Sets OwningContactAlias via OData PATCH — the only way to set a person-level
+ * owner via API (there is no AssignIncident action). Verifies with a GET.
+ *
+ *   icm-assign <ID> <alias>      # assign to a person
+ *   icm-assign <ID> ""           # unassign
+ */
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 2) { console.error('usage: icm-assign ID ALIAS   (ALIAS="" to unassign)'); process.exit(2); }
+const [incidentId, alias] = argv;
+
+await icm.assign(incidentId, alias);
+const got = await icm.getIncident(incidentId);
+const owner = got && typeof got === "object" ? got.OwningContactAlias ?? null : null;
+if (owner === (alias || null)) {
+  console.log(`OK ${incidentId} -> ${JSON.stringify(owner)}`);
+} else {
+  console.error(`WARN ${incidentId}: expected ${JSON.stringify(alias)} but got ${JSON.stringify(owner)}`);
+  process.exit(1);
+}

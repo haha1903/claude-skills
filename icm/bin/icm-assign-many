@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+/**
+ * Bulk-assign IcM incidents to one person (thin wrapper over iris icm.assignMany).
+ * WRITE OP. Concurrent with per-incident GET verify (IcM has no $batch).
+ *
+ *   icm-assign-many <alias> <id> [<id> ...]     # ids as args
+ *   icm-assign-many <alias> -                    # ids from stdin (whitespace-separated)
+ *
+ * Prints a JSON summary {ok:[...], failed:[{item,error}]}.
+ */
+import fs from "node:fs";
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 2) { console.error("usage: icm-assign-many ALIAS ID [ID ...]   (or ALIAS - for stdin)"); process.exit(2); }
+const alias = argv[0];
+const rest = argv.slice(1);
+const raw = rest.length === 1 && rest[0] === "-" ? fs.readFileSync(0, "utf-8").split(/\s+/) : rest;
+const ids = raw.map((s) => s.trim()).filter(Boolean);
+if (!ids.length) { console.error("no incident ids given"); process.exit(2); }
+
+const mapping = Object.fromEntries(ids.map((i) => [i, alias]));
+const res = await icm.assignMany(mapping);
+console.log(JSON.stringify(res, null, 2));
+if (res.failed.length) process.exit(1);

@@ -1,0 +1,25 @@
+#!/usr/bin/env node
+/**
+ * Bulk-acknowledge IcM incidents (thin wrapper over iris icm.ackMany). WRITE OP.
+ * Ack auto-sets OwningContactAlias to the ack contact, so this both acks and
+ * assigns. Concurrent with per-incident GET verify.
+ *
+ *   icm-ack-many <contact> <id> [<id> ...]      # ids as args
+ *   icm-ack-many <contact> -                     # ids from stdin
+ *
+ * Prints a JSON summary {ok:[...], failed:[{item,error}]}.
+ */
+import fs from "node:fs";
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 2) { console.error("usage: icm-ack-many CONTACT ID [ID ...]   (or CONTACT - for stdin)"); process.exit(2); }
+const contact = argv[0];
+const rest = argv.slice(1);
+const raw = rest.length === 1 && rest[0] === "-" ? fs.readFileSync(0, "utf-8").split(/\s+/) : rest;
+const ids = raw.map((s) => s.trim()).filter(Boolean);
+if (!ids.length) { console.error("no incident ids given"); process.exit(2); }
+
+const res = await icm.ackMany(ids, contact);
+console.log(JSON.stringify(res, null, 2));
+if (res.failed.length) process.exit(1);

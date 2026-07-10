@@ -1,0 +1,15 @@
+#!/usr/bin/env node
+/**
+ * Call any IcM OData endpoint (thin wrapper over iris icm.odata).
+ *   icm-call GET  'incidents(800736577)'
+ *   icm-call POST 'incidents(800736577)/MitigateIncident' '{"MitigateParameters":{...}}'
+ *   icm-call GET  '$metadata'
+ * PATH is appended to https://prod.microsofticm.com/api/user/. Body is optional JSON.
+ */
+import { icm } from "../../_iris-shared/index.mjs";
+
+const [method, path, body] = process.argv.slice(2);
+if (!method || !path) { console.error("usage: icm-call METHOD PATH [BODY_JSON]"); process.exit(2); }
+
+const res = await icm.odata(method, path, body);
+console.log(typeof res === "string" ? res : JSON.stringify(res, null, 2));

@@ -25,5 +25,6 @@ const mod = await import(pathToFileURL(SDK_ENTRY).href);
 export const auth = mod.auth;
 export const azcli = mod.azcli;
 export const kusto = mod.kusto;
+export const icm = mod.icm;
 export const bridge = mod.bridge;
 export const log = mod.log;
