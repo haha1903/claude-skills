@@ -12,7 +12,9 @@ import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
-const SDK_ROOT = "/Users/haichang/Projects/iris";
+// IRIS_ROOT lets the container (and any non-default checkout) point at its own
+// iris build; falls back to the local dev path.
+const SDK_ROOT = process.env.IRIS_ROOT ?? "/Users/haichang/Projects/iris";
 const SDK_ENTRY = path.join(SDK_ROOT, "dist/index.js");
 
 if (!existsSync(SDK_ENTRY)) {
