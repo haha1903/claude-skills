@@ -1,0 +1,20 @@
+{
+  "_comment": "Standalone weekly IcM incident-activity summary (no iris). Auth is plain `az`. The grouping column is computed by the `categoryKql` snippet below and MUST be named by `groupBy`. Columns are fixed (New/Resolved/Mitigated + a Transferred-Out total).",
+
+  "cluster": "https://icmcluster.kusto.windows.net",
+  "database": "IcmDataWarehouse",
+  "owningTenantId": 25998,
+  "teamName": "Region Access & Quota (Lionrock)",
+  "timeZone": "Australia/Sydney",
+  "weekStartDay": 5,
+
+  "groupBy": "Category",
+  "categoryLabel": "business category",
+  "customFieldIds": [45266, 45272, 45269],
+
+  "categoryKql": "| extend Category = case(TeamLeaf == 'ServiceBlueprint' and cf_45266 == 'Blueprint', 'Service Blueprint', TeamLeaf == 'ServiceBlueprint' and cf_45266 == 'Execution Plan', 'Execution Plan', TeamLeaf == 'ServiceBlueprint', 'Service Blueprint', TeamLeaf == 'OnDemandQuota' and cf_45272 == 'OnDemandQuota Ev2 extension', 'On-Demand Quota (Ev2)', TeamLeaf == 'OnDemandQuota', 'On-Demand Quota', TeamLeaf == 'plannedQuotas', 'Planned Quota', TeamLeaf in ('Whitelist&Quota', 'SubscriptionWhitelisting'), 'Subscription Whitelisting', TeamLeaf == 'CIS-Ev2Bridge', 'CIS-Ev2 Bridge', TeamLeaf)",
+
+  "_howToClassify": "Edit categoryKql. It is a KQL pipeline snippet (one or more '| extend ...' steps) that must produce a column named by groupBy (default 'Category'). Available inputs per incident: TeamLeaf (OwningTeamName after the last backslash), OwningTeamName, Severity, Status, IncidentType, MonitorId, IsNew/IsResolved/IsMitigated/IsTransferred, and cf_<id> for every id listed in customFieldIds. To classify by a DIFFERENT custom field, add its id to customFieldIds and branch on cf_<id> in the case(). Example: cf_45269 (RPName) has values Subscription / PlannedQuota / PreApprovedQuota. Merge teams by mapping them to the same string; split a team by branching on a cf. No script edit needed.",
+  "_cfVocab": "Seen values — cf 45266: Blueprint, Execution Plan, Fulfillment. cf 45272: Other request related, Creating Request on Lionrock Portal, OnDemandQuota Ev2 extension. cf 45269 (RPName): Subscription, PlannedQuota, PreApprovedQuota. Most teams set no cf and map by TeamLeaf alone.",
+  "_auth": "Run `az login` as a user with IcM Kusto warehouse read access. The warehouse (icmcluster.kusto.windows.net) accepts the signed-in user's token; no cert, no iris."
+}
