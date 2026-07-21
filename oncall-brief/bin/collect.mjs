@@ -3,7 +3,7 @@
  * Collect all OnCall daily-brief data sources in parallel, print one JSON blob.
  *
  * The agent should run this ONCE, read the JSON, then organize the report and send
- * it (Logseq + ~/Tasks/Scrum + Notes to self). All API/query logic lives here so it
+ * it (Obsidian + ~/Tasks/Scrum + Notes to self). All API/query logic lives here so it
  * runs fast and identically every day — the agent does not re-derive commands.
  *
  * Usage:  collect.mjs            # today (Sydney) window

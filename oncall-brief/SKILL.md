@@ -1,6 +1,6 @@
 ---
 name: oncall-brief
-description: Use when the user (on the Lionrock / Region Access & Quota on-call rotation) wants a daily on-call inspection brief — e.g. "oncall brief", "/oncall-brief", "collect today's on-call status". Walks the team's OneNote daily checklist, auto-collects every reachable source (IcM, ADO pipelines, Lionrock Geneva log, support mail/Teams), writes an English report to Logseq + ~/Tasks/Scrum/, and after user review posts it to the team Teams meeting chat.
+description: Use when the user (on the Lionrock / Region Access & Quota on-call rotation) wants a daily on-call inspection brief — e.g. "oncall brief", "/oncall-brief", "collect today's on-call status". Walks the team's OneNote daily checklist, auto-collects every reachable source (IcM, ADO pipelines, Lionrock Geneva log, support mail/Teams), writes an English report to Obsidian + ~/Tasks/Scrum/, and after user review posts it to the team Teams meeting chat.
 ---
 
 # OnCall Daily Brief
@@ -173,10 +173,10 @@ grouped into the same 5 buckets the collector uses.
 
 ### 3. Persist (both, immediately — don't wait for review)
 
-- **Logseq**: append to `journals/YYYY_MM_DD.md` under a top block
+- **Obsidian**: append to `journals/YYYY-MM-DD.md` (hyphen-separated) under a top block
   `- [[OnCall]] daily brief #oncall` (keep the `#oncall` tag; nest the sections
-  under it). Logseq root:
-  `~/Library/Mobile Documents/iCloud~com~logseq~logseq/Documents/Logseq`.
+  under it). Obsidian vault root:
+  `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Notes`.
   Do not commit.
 - **Local**: write `~/Tasks/Scrum/OnCall_YYYY-MM-DD.md` (full report).
 
