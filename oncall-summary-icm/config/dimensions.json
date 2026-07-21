@@ -21,9 +21,7 @@
         { "team": "plannedQuotas", "name": "Planned Quota" },
         { "team": "Whitelist&Quota", "name": "Subscription Whitelisting" },
         { "team": "SubscriptionWhitelisting", "name": "Subscription Whitelisting" },
-        { "team": "CIS-Ev2Bridge", "name": "CIS-Ev2 Bridge" },
-        { "team": "Triage", "name": "Triage" },
-        { "team": "BET", "name": "BET (out of scope)" }
+        { "team": "CIS-Ev2Bridge", "name": "CIS-Ev2 Bridge" }
       ]
     }
   ],
