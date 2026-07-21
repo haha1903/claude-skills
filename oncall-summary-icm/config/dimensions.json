@@ -1,0 +1,25 @@
+{
+  "_comment": "Row-grouping dimensions for the weekly IcM on-call summary. Columns are fixed (New/Resolved/Mitigated/Transferred); only these rows are configurable. Order = nesting order (first is the top-level group). Each dimension: source 'column' reads an Incidents column; source 'customField' reads one or more IcM CustomFieldIds (first non-empty wins). Optional valueMap merges/renames raw values ({ rawValue: displayName }); several raws mapping to one name collapse into one group. Unmapped values pass through unchanged; empty/null -> '(no <label>)'.",
+  "team": 67250,
+  "owningTenantId": 25998,
+  "timeZone": "Australia/Sydney",
+  "dimensions": [
+    {
+      "key": "team",
+      "source": "column",
+      "column": "OwningTeamName",
+      "label": "team"
+    },
+    {
+      "key": "issueType",
+      "source": "customField",
+      "customFieldIds": [45266, 45272],
+      "label": "issue type",
+      "valueMap": {
+        "BuildOut": "Buildout",
+        "Buildout": "Buildout"
+      }
+    }
+  ],
+  "_notes": "The IssueType custom field exists under two ids (45266, 45272) for different teams; listing both in customFieldIds merges them into one issue-type column. To reclassify: change 'dimensions' (e.g. swap the primary to {source:'column', column:'Severity', label:'severity'}), add/adjust valueMap entries to merge or rename values, or reorder for different nesting. No KQL edit needed. Candidate custom fields: 45266/45272 IssueType, 24897 Region, 45269 RPName, 45267 BlueprintName. Candidate columns: OwningTeamName, Severity, Status, IncidentType, MonitorId."
+}
