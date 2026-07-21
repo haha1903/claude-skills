@@ -59456,6 +59456,7 @@ __export(icm_exports, {
   ackMany: () => ackMany,
   addComment: () => addComment,
   addKeyword: () => addKeyword,
+  aggregateOncallByWeek: () => aggregateOncallByWeek,
   annotateOncallState: () => annotateOncallState,
   assign: () => assign,
   assignMany: () => assignMany,
@@ -59481,10 +59482,13 @@ __export(icm_exports, {
   mergeWindows: () => mergeWindows,
   mitigate: () => mitigate,
   odata: () => odata,
+  oncallRoster: () => oncallRoster,
+  oncallWeekStart: () => oncallWeekStart,
   oncallWindows: () => oncallWindows,
   parseFieldMeta: () => parseFieldMeta,
   parseODataResponse: () => parseODataResponse,
   parseOncall: () => parseOncall,
+  parseOncallRoster: () => parseOncallRoster,
   pendingActions: () => pendingActions,
   pendingActionsApi2: () => pendingActionsApi2,
   pendingByFamily: () => pendingByFamily,
@@ -59968,6 +59972,80 @@ function parseOncall(raw, alias) {
 function isoZ(d) {
   return d.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
+function slotHours(start, end) {
+  return (new Date(end).getTime() - new Date(start).getTime()) / 36e5;
+}
+function parseOncallRoster(raw) {
+  const value = raw?.value ?? [];
+  const out = [];
+  for (const team of value) {
+    for (const s of team.TimeSlotOnCalls ?? []) {
+      if (!s.StartTime || !s.EndTime) continue;
+      const start = String(s.StartTime), end = String(s.EndTime);
+      const hours = slotHours(start, end);
+      const primary = [];
+      const secondary = [];
+      for (const c of s.Contacts ?? []) {
+        const info = c.EffectiveOnCallContactInfo ?? {};
+        const alias = info.Alias ?? "";
+        if (!alias) continue;
+        const name3 = `${info.FirstName ?? ""} ${info.LastName ?? ""}`.trim();
+        const person = { alias, name: name3, hours };
+        if (c.Position === 0) primary.push(person);
+        else if (c.Position === 1) secondary.push(person);
+      }
+      out.push({ start, end, primary, secondary });
+    }
+  }
+  return out;
+}
+function oncallWeekStart(instantIso, timeZone, weekStartDay = 5) {
+  const d = new Date(instantIso);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short"
+  }).formatToParts(d);
+  const get = (t) => parts.find((p) => p.type === t)?.value ?? "";
+  const y = Number(get("year")), m = Number(get("month")), day = Number(get("day"));
+  const wdMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const wd = wdMap[get("weekday")];
+  const back = (wd - weekStartDay + 7) % 7;
+  const start = new Date(Date.UTC(y, m - 1, day) - back * 864e5);
+  return start.toISOString().slice(0, 10);
+}
+function rollup(people) {
+  const byAlias = /* @__PURE__ */ new Map();
+  for (const p of people) {
+    const cur = byAlias.get(p.alias);
+    if (cur) cur.hours += p.hours;
+    else byAlias.set(p.alias, { ...p });
+  }
+  return [...byAlias.values()].sort((a, b) => b.hours - a.hours);
+}
+function aggregateOncallByWeek(slots, timeZone, weekStartDay = 5) {
+  const buckets = /* @__PURE__ */ new Map();
+  for (const s of slots) {
+    const mid = new Date((new Date(s.start).getTime() + new Date(s.end).getTime()) / 2).toISOString();
+    const wk = oncallWeekStart(mid, timeZone, weekStartDay);
+    const b = buckets.get(wk) ?? { primary: [], secondary: [] };
+    b.primary.push(...s.primary);
+    b.secondary.push(...s.secondary);
+    buckets.set(wk, b);
+  }
+  return [...buckets.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([weekStart, b]) => {
+    const [wy, wm, wd] = weekStart.split("-").map(Number);
+    const end = new Date(Date.UTC(wy, wm - 1, wd) + 6 * 864e5);
+    return {
+      weekStart,
+      weekEnd: end.toISOString().slice(0, 10),
+      primary: rollup(b.primary),
+      secondary: rollup(b.secondary)
+    };
+  });
+}
 async function oncallWindows(teamId, alias, opts = {}) {
   const now = /* @__PURE__ */ new Date();
   const start = opts.start ?? new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -59981,6 +60059,19 @@ async function oncallWindows(teamId, alias, opts = {}) {
   const merged = mergeWindows(parseOncall(raw, alias));
   const onCall = merged.some((w) => new Date(w.start) <= now && now < new Date(w.end));
   return { onCall, teamId: Number(teamId), windows: merged, checkedAt: now.toISOString() };
+}
+async function oncallRoster(teamId, opts = {}) {
+  const now = /* @__PURE__ */ new Date();
+  const end = opts.end ?? now;
+  const start = opts.start ?? new Date(end.getTime() - (opts.days ?? 56) * 864e5);
+  const raw = await icmRest(
+    "POST",
+    ONCALL_ENDPOINT,
+    { TeamIds: [Number(teamId)], StartTime: isoZ(start), EndTime: isoZ(end) },
+    opts.timeout ?? 30
+  );
+  const slots = parseOncallRoster(raw);
+  return aggregateOncallByWeek(slots, opts.timeZone ?? "UTC", opts.weekStartDay ?? 5);
 }
 function me() {
   return os6.userInfo().username;
