@@ -1,29 +1,24 @@
 /**
- * Shared bootstrap for ops skills (kusto/icm/ev2/...). Imports the compiled iris
- * SDK, auto-builds if needed, and re-exports its base/ops namespaces. Mirrors
- * _o-sdk-shared/client.mjs, but exposes the flat modules rather than an
- * Agent365Client.
+ * Shared bootstrap for ops skills (kusto/icm/ev2/boards/...). Loads the iris SDK
+ * and re-exports its base/ops + agent365 namespaces.
+ *
+ * By default it loads a self-contained, vendored bundle (iris.bundle.mjs) next to
+ * this file — no ~/Projects/iris checkout or node_modules needed. Set IRIS_ROOT to
+ * load a source `dist/` build instead (used by the AKS image and local iris dev).
+ * Regenerate the bundle after changing iris: run `npm run bundle:skills` in
+ * ~/Projects/iris.
  *
  *   import { kusto } from "../../_iris-shared/index.mjs";
  *   const { cols, rows } = await kusto.queryKusto(cluster, db, kql);
  */
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 
-// IRIS_ROOT lets the container (and any non-default checkout) point at its own
-// iris build; falls back to the local dev path.
-const SDK_ROOT = process.env.IRIS_ROOT ?? "/Users/haichang/Projects/iris";
-const SDK_ENTRY = path.join(SDK_ROOT, "dist/index.js");
+const entry = process.env.IRIS_ROOT
+  ? pathToFileURL(path.join(process.env.IRIS_ROOT, "dist/index.js")).href
+  : new URL("./iris.bundle.mjs", import.meta.url).href;
 
-if (!existsSync(SDK_ENTRY)) {
-  console.error("iris SDK not built. Building now…");
-  const r = spawnSync("npm", ["run", "build"], { cwd: SDK_ROOT, stdio: "inherit" });
-  if (r.status !== 0) throw new Error("iris SDK build failed");
-}
-
-const mod = await import(pathToFileURL(SDK_ENTRY).href);
+const mod = await import(entry);
 export const auth = mod.auth;
 export const azcli = mod.azcli;
 export const kusto = mod.kusto;
