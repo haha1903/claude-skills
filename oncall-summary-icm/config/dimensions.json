@@ -1,27 +1,31 @@
 {
-  "_comment": "Row-grouping dimensions for the weekly IcM on-call summary. Columns are fixed (New/Resolved/Mitigated/Transferred); only these rows are configurable. Order = nesting order (first is the top-level group). Each dimension: source 'column' reads an Incidents column; source 'customField' reads one or more IcM CustomFieldIds (first non-empty wins). Optional valueMap merges/renames raw values ({ rawValue: displayName }); several raws mapping to one name collapse into one group. Unmapped values pass through unchanged; empty/null -> '(no <label>)'.",
+  "_comment": "Row grouping for the weekly IcM on-call summary. Columns are fixed (New/Resolved/Mitigated + a Transferred-Out total); only these rows are configurable. The default groups by a single synthesized 'business category': source 'composite' reads the team leaf + custom fields and maps (team [+ cf]) -> a business name via the rules table below (first match wins; cf omitted = any cf for that team; unmatched -> raw team leaf). Alternatives: source 'column' (an Incidents column like Severity), source 'customField' (raw cf value). Order of dimensions = nesting.",
   "team": 67250,
   "owningTenantId": 25998,
   "timeZone": "Australia/Sydney",
   "daytime": { "fromHour": 8, "toHour": 16 },
-  "_daytimeNote": "On-call roster only counts the Sydney daytime shift (08:00-16:00). The rotation is follow-the-sun (3 x 8h slots/day), so without this filter one person appears as both primary and secondary across different shifts. Set daytime to null to include all shifts.",
+  "_daytimeNote": "On-call roster only counts the Sydney daytime shift (08:00-16:00); the rotation is follow-the-sun (3x8h/day) so without this one person shows as both primary and secondary. Set daytime to null to include all shifts.",
   "dimensions": [
     {
-      "key": "team",
-      "source": "column",
-      "column": "OwningTeamName",
-      "label": "team"
-    },
-    {
-      "key": "issueType",
-      "source": "customField",
+      "key": "businessCategory",
+      "source": "composite",
       "customFieldIds": [45266, 45272],
-      "label": "issue type",
-      "valueMap": {
-        "BuildOut": "Buildout",
-        "Buildout": "Buildout"
-      }
+      "label": "business category",
+      "rules": [
+        { "team": "ServiceBlueprint", "cf": "Blueprint", "name": "Service Blueprint" },
+        { "team": "ServiceBlueprint", "cf": "Execution Plan", "name": "Execution Plan" },
+        { "team": "ServiceBlueprint", "cf": "Fulfillment", "name": "Fulfillment" },
+        { "team": "ServiceBlueprint", "name": "Service Blueprint" },
+        { "team": "OnDemandQuota", "cf": "OnDemandQuota Ev2 extension", "name": "On-Demand Quota (Ev2)" },
+        { "team": "OnDemandQuota", "name": "On-Demand Quota" },
+        { "team": "plannedQuotas", "name": "Planned Quota" },
+        { "team": "Whitelist&Quota", "name": "Subscription Whitelisting" },
+        { "team": "SubscriptionWhitelisting", "name": "Subscription Whitelisting" },
+        { "team": "CIS-Ev2Bridge", "name": "CIS-Ev2 Bridge" },
+        { "team": "Triage", "name": "Triage" },
+        { "team": "BET", "name": "BET (out of scope)" }
+      ]
     }
   ],
-  "_notes": "The IssueType custom field exists under two ids (45266, 45272) for different teams; listing both in customFieldIds merges them into one issue-type column. To reclassify: change 'dimensions' (e.g. swap the primary to {source:'column', column:'Severity', label:'severity'}), add/adjust valueMap entries to merge or rename values, or reorder for different nesting. No KQL edit needed. Candidate custom fields: 45266/45272 IssueType, 24897 Region, 45269 RPName, 45267 BlueprintName. Candidate columns: OwningTeamName, Severity, Status, IncidentType, MonitorId."
+  "_notes": "The business-category custom field lives under two ids (45266, 45272) for different teams; both are listed in customFieldIds so a team's cf value is picked up regardless of which id holds it. To reclassify: edit the rules (add/rename business categories, merge teams by mapping to the same name, split a team by cf). No KQL change needed. Raw cf vocabulary seen: Blueprint, Execution Plan, Fulfillment (cf 45266); Other request related, Creating Request on Lionrock Portal, OnDemandQuota Ev2 extension (cf 45272). Most teams (Whitelist&Quota, SubscriptionWhitelisting, CIS-Ev2Bridge, plannedQuotas) set no cf, so they map by team alone."
 }

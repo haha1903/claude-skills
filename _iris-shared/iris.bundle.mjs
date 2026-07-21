@@ -59502,11 +59502,13 @@ __export(icm_exports, {
   portalUrl: () => portalUrl,
   removeKeyword: () => removeKeyword,
   resolve: () => resolve,
+  resolveComposite: () => resolveComposite,
   resolveMany: () => resolveMany,
   resolveOwner: () => resolveOwner,
   resolveSavedQuery: () => resolveSavedQuery,
   savedQueryIncidents: () => savedQueryIncidents,
   sharedQueryIncidents: () => sharedQueryIncidents,
+  teamLeaf: () => teamLeaf,
   transfer: () => transfer,
   update: () => update
 });
@@ -60089,6 +60091,21 @@ async function oncallRoster(teamId, opts = {}) {
   const slots = parseOncallRoster(raw);
   return aggregateOncallByWeek(slots, opts.timeZone ?? "UTC", opts.weekStartDay ?? 5, opts.daytime);
 }
+function teamLeaf(team) {
+  const s = team == null ? "" : String(team);
+  const i = s.lastIndexOf("\\");
+  return i >= 0 ? s.slice(i + 1) : s;
+}
+function resolveComposite(team, cf, rules) {
+  const leaf = teamLeaf(team);
+  const cfVal = cf == null ? "" : String(cf);
+  for (const r of rules) {
+    if (r.team !== leaf) continue;
+    if (r.cf != null && r.cf !== cfVal) continue;
+    return r.name;
+  }
+  return leaf;
+}
 function oncallSummaryKql(owningTenantId, w0, w1, customFieldIds = []) {
   const cfIds = customFieldIds.length ? customFieldIds.join(", ") : "-1";
   const cfExtend = customFieldIds.length ? customFieldIds.map((id) => `| extend cf_${id} = tostring(cf_bag["${id}"])`).join("\n  ") : "";
@@ -60123,13 +60140,17 @@ snap
           OwningTeamName, OwningTeamId, Severity, Status, IncidentType, MonitorId${cfProject}
 `;
 }
-function dimValue(row, dim) {
-  if (dim.source !== "customField") return row[dim.column ?? dim.key];
+function firstCf(row, dim) {
   for (const id of dim.customFieldIds ?? []) {
     const v = row[`cf_${id}`];
-    if (v != null && String(v) !== "") return v;
+    if (v != null && String(v) !== "") return String(v);
   }
   return "";
+}
+function dimValue(row, dim) {
+  if (dim.source === "customField") return firstCf(row, dim);
+  if (dim.source === "composite") return resolveComposite(row.OwningTeamName, firstCf(row, dim), dim.rules ?? []);
+  return row[dim.column ?? dim.key];
 }
 function applyValueMap(raw, dim) {
   const s = raw == null ? "" : String(raw);
