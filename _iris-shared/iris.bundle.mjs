@@ -59457,7 +59457,9 @@ __export(icm_exports, {
   addComment: () => addComment,
   addKeyword: () => addKeyword,
   aggregateOncallByWeek: () => aggregateOncallByWeek,
+  aggregateSummary: () => aggregateSummary,
   annotateOncallState: () => annotateOncallState,
+  applyValueMap: () => applyValueMap,
   assign: () => assign,
   assignMany: () => assignMany,
   buildAckBody: () => buildAckBody,
@@ -59479,10 +59481,13 @@ __export(icm_exports, {
   isUrgent: () => isUrgent,
   listBySavedQuery: () => listBySavedQuery,
   listSharedQueries: () => listSharedQueries,
+  localMidnightUtc: () => localMidnightUtc,
   mergeWindows: () => mergeWindows,
   mitigate: () => mitigate,
   odata: () => odata,
   oncallRoster: () => oncallRoster,
+  oncallSummary: () => oncallSummary,
+  oncallSummaryKql: () => oncallSummaryKql,
   oncallWeekStart: () => oncallWeekStart,
   oncallWindows: () => oncallWindows,
   parseFieldMeta: () => parseFieldMeta,
@@ -60072,6 +60077,127 @@ async function oncallRoster(teamId, opts = {}) {
   );
   const slots = parseOncallRoster(raw);
   return aggregateOncallByWeek(slots, opts.timeZone ?? "UTC", opts.weekStartDay ?? 5);
+}
+function oncallSummaryKql(owningTenantId, w0, w1, customFieldIds = []) {
+  const cfIds = customFieldIds.length ? customFieldIds.join(", ") : "-1";
+  const cfExtend = customFieldIds.length ? customFieldIds.map((id) => `| extend cf_${id} = tostring(cf_bag["${id}"])`).join("\n  ") : "";
+  const cfProject = customFieldIds.map((id) => `, cf_${id}`).join("");
+  return `
+let W0 = datetime(${w0});
+let W1 = datetime(${w1});
+let cf = IncidentCustomFieldEntries
+    | where CustomFieldId in (${cfIds})
+    | summarize arg_max(Lens_IngestionTime, *) by IncidentId, CustomFieldId
+    | summarize cf_bag = make_bag(bag_pack(tostring(CustomFieldId), Value)) by IncidentId;
+let snap = Incidents
+    | where OwningTenantId == ${owningTenantId}
+    | summarize arg_max(Lens_IngestionTime, *) by IncidentId;
+let winInc = snap | where CreateDate >= W0 and CreateDate < W1 | distinct IncidentId;
+let firstTeam = Incidents | where IncidentId in (winInc)
+    | summarize arg_min(ModifiedDate, OwningTeamId) by IncidentId
+    | project IncidentId, FirstTeamId = OwningTeamId;
+let transfers = snap | where IncidentId in (winInc)
+    | join kind=inner firstTeam on IncidentId
+    | where OwningTeamId != FirstTeamId
+    | distinct IncidentId;
+snap
+| extend IsNew = CreateDate >= W0 and CreateDate < W1
+| extend IsResolved = ResolveDate >= W0 and ResolveDate < W1
+| extend IsMitigated = MitigateDate >= W0 and MitigateDate < W1
+| extend IsTransferred = IncidentId in (transfers)
+| where IsNew or IsResolved or IsMitigated or IsTransferred
+| join kind=leftouter cf on IncidentId
+  ${cfExtend}
+| project IncidentId, IsNew, IsResolved, IsMitigated, IsTransferred,
+          OwningTeamName, OwningTeamId, Severity, Status, IncidentType, MonitorId${cfProject}
+`;
+}
+function dimValue(row, dim) {
+  if (dim.source !== "customField") return row[dim.column ?? dim.key];
+  for (const id of dim.customFieldIds ?? []) {
+    const v = row[`cf_${id}`];
+    if (v != null && String(v) !== "") return v;
+  }
+  return "";
+}
+function applyValueMap(raw, dim) {
+  const s = raw == null ? "" : String(raw);
+  if (s === "") return `(no ${dim.label ?? dim.key})`;
+  return dim.valueMap?.[s] ?? s;
+}
+function aggregateSummary(rows, dimensions) {
+  const acc = /* @__PURE__ */ new Map();
+  for (const r of rows) {
+    const groups = dimensions.map((d) => applyValueMap(dimValue(r, d), d));
+    const key = groups.join("\0");
+    let g = acc.get(key);
+    if (!g) {
+      g = { groups, New: 0, Resolved: 0, Mitigated: 0, Transferred: 0 };
+      acc.set(key, g);
+    }
+    if (r.IsNew) g.New++;
+    if (r.IsResolved) g.Resolved++;
+    if (r.IsMitigated) g.Mitigated++;
+    if (r.IsTransferred) g.Transferred++;
+  }
+  return [...acc.values()].sort((a, b) => a.groups.join("\0").localeCompare(b.groups.join("\0")));
+}
+async function oncallSummary(teamId, owningTenantId, opts) {
+  const tz = opts.timeZone ?? "Australia/Sydney";
+  const weekStartDay = opts.weekStartDay ?? 5;
+  const now = opts.now ?? /* @__PURE__ */ new Date();
+  const thisWeekStart = oncallWeekStart(now.toISOString(), tz, weekStartDay);
+  const [sy, sm, sd] = thisWeekStart.split("-").map(Number);
+  const weekStartLocalDate = new Date(Date.UTC(sy, sm - 1, sd) - (opts.weekOffset ?? 0) * 7 * 864e5);
+  const weekStart = weekStartLocalDate.toISOString().slice(0, 10);
+  const weekEndDate = new Date(weekStartLocalDate.getTime() + 6 * 864e5);
+  const weekEnd = weekEndDate.toISOString().slice(0, 10);
+  const startUtc = localMidnightUtc(weekStart, tz);
+  const endUtc = localMidnightUtc(new Date(weekStartLocalDate.getTime() + 7 * 864e5).toISOString().slice(0, 10), tz);
+  const cluster = opts.cluster ?? requireConfig((c) => c.icm.warehouseCluster, "icm.warehouseCluster");
+  const cfIds = [...new Set(opts.dimensions.flatMap((d) => d.customFieldIds ?? []))];
+  const kql = oncallSummaryKql(owningTenantId, startUtc, endUtc, cfIds);
+  const { rows } = await queryKusto(cluster, WAREHOUSE_DB, kql, opts.timeout ?? 300);
+  const summaryRows = rows;
+  const groups = aggregateSummary(summaryRows, opts.dimensions);
+  const transferredOut = summaryRows.filter((r) => r.IsTransferred).length;
+  const weeks = await oncallRoster(teamId, {
+    start: new Date(startUtc),
+    end: new Date(endUtc),
+    timeZone: tz,
+    weekStartDay,
+    timeout: opts.timeout ?? 30
+  });
+  const wk = weeks.find((w) => w.weekStart === weekStart) ?? weeks[0];
+  return {
+    window: { weekStart, weekEnd, startUtc, endUtc },
+    primary: wk?.primary ?? [],
+    secondary: wk?.secondary ?? [],
+    dimensions: opts.dimensions,
+    groups,
+    transferredOut
+  };
+}
+function localMidnightUtc(localDate, timeZone) {
+  const [y, m, d] = localDate.split("-").map(Number);
+  const probe = new Date(Date.UTC(y, m - 1, d, 12));
+  const offsetMin = tzOffsetMinutes(probe, timeZone);
+  return new Date(Date.UTC(y, m - 1, d) - offsetMin * 6e4).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+function tzOffsetMinutes(date4, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).formatToParts(date4);
+  const get = (t) => Number(parts.find((p) => p.type === t)?.value);
+  const asUtc = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour"), get("minute"), get("second"));
+  return Math.round((asUtc - date4.getTime()) / 6e4);
 }
 function me() {
   return os6.userInfo().username;
