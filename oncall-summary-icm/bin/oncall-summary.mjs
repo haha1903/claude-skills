@@ -31,6 +31,7 @@ const summary = await icm.oncallSummary(cfg.team, cfg.owningTenantId, {
   dimensions: cfg.dimensions,
   weekOffset,
   timeZone: cfg.timeZone ?? "Australia/Sydney",
+  daytime: cfg.daytime ?? undefined,
 });
 
 const md = render(summary);

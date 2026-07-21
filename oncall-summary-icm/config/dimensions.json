@@ -3,6 +3,8 @@
   "team": 67250,
   "owningTenantId": 25998,
   "timeZone": "Australia/Sydney",
+  "daytime": { "fromHour": 8, "toHour": 16 },
+  "_daytimeNote": "On-call roster only counts the Sydney daytime shift (08:00-16:00). The rotation is follow-the-sun (3 x 8h slots/day), so without this filter one person appears as both primary and secondary across different shifts. Set daytime to null to include all shifts.",
   "dimensions": [
     {
       "key": "team",

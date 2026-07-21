@@ -59478,6 +59478,7 @@ __export(icm_exports, {
   expandDateToken: () => expandDateToken,
   fetchSavedQueryProperties: () => fetchSavedQueryProperties,
   getIncident: () => getIncident,
+  isDaytimeSlot: () => isDaytimeSlot,
   isUrgent: () => isUrgent,
   listBySavedQuery: () => listBySavedQuery,
   listSharedQueries: () => listSharedQueries,
@@ -60030,9 +60031,19 @@ function rollup(people) {
   }
   return [...byAlias.values()].sort((a, b) => b.hours - a.hours);
 }
-function aggregateOncallByWeek(slots, timeZone, weekStartDay = 5) {
+function localHour(instantIso, timeZone) {
+  const h = new Intl.DateTimeFormat("en-US", { timeZone, hour: "2-digit", hour12: false }).format(new Date(instantIso));
+  return Number(h) % 24;
+}
+function isDaytimeSlot(slot, timeZone, fromHour = 8, toHour = 16) {
+  const mid = new Date((new Date(slot.start).getTime() + new Date(slot.end).getTime()) / 2).toISOString();
+  const h = localHour(mid, timeZone);
+  return h >= fromHour && h < toHour;
+}
+function aggregateOncallByWeek(slots, timeZone, weekStartDay = 5, daytime) {
+  const kept = daytime ? slots.filter((s) => isDaytimeSlot(s, timeZone, daytime.fromHour, daytime.toHour)) : slots;
   const buckets = /* @__PURE__ */ new Map();
-  for (const s of slots) {
+  for (const s of kept) {
     const mid = new Date((new Date(s.start).getTime() + new Date(s.end).getTime()) / 2).toISOString();
     const wk = oncallWeekStart(mid, timeZone, weekStartDay);
     const b = buckets.get(wk) ?? { primary: [], secondary: [] };
@@ -60076,7 +60087,7 @@ async function oncallRoster(teamId, opts = {}) {
     opts.timeout ?? 30
   );
   const slots = parseOncallRoster(raw);
-  return aggregateOncallByWeek(slots, opts.timeZone ?? "UTC", opts.weekStartDay ?? 5);
+  return aggregateOncallByWeek(slots, opts.timeZone ?? "UTC", opts.weekStartDay ?? 5, opts.daytime);
 }
 function oncallSummaryKql(owningTenantId, w0, w1, customFieldIds = []) {
   const cfIds = customFieldIds.length ? customFieldIds.join(", ") : "-1";
@@ -60166,6 +60177,7 @@ async function oncallSummary(teamId, owningTenantId, opts) {
     end: new Date(endUtc),
     timeZone: tz,
     weekStartDay,
+    daytime: opts.daytime,
     timeout: opts.timeout ?? 30
   });
   const wk = weeks.find((w) => w.weekStart === weekStart) ?? weeks[0];
