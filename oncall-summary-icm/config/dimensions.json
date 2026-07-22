@@ -1,5 +1,5 @@
 {
-  "_comment": "Row grouping for the weekly IcM on-call summary. Columns are fixed (New/Resolved/Mitigated + a Transferred-Out total); only these rows are configurable. The default groups by a single synthesized 'business category': source 'composite' reads the team leaf + custom fields and maps (team [+ cf]) -> a business name via the rules table below (first match wins; cf omitted = any cf for that team; unmatched -> raw team leaf). Alternatives: source 'column' (an Incidents column like Severity), source 'customField' (raw cf value). Order of dimensions = nesting.",
+  "_comment": "Row grouping for the weekly IcM on-call summary. Columns are fixed (New/Resolved/Mitigated + a Transferred-Out total); only these rows are configurable. The default groups by a single 'business category': source 'composite'. For each incident it first tries the rules below (first match wins; cf omitted = any cf for that team) — used ONLY to split a team by a custom field. If no rule matches, it falls back to the team's real IcM display name, fetched automatically via iris icm.teamsById (e.g. 67250 -> 'Region Access & Quota', 60533 -> 'CIS RPs'); only if that lookup fails does it use the raw team leaf. So you do NOT hand-write team display names here — just the cf splits. Alternatives: source 'column' (an Incidents column like Severity), source 'customField' (raw cf value). Order of dimensions = nesting.",
   "team": 67250,
   "owningTenantId": 25998,
   "timeZone": "Australia/Sydney",
@@ -12,18 +12,10 @@
       "customFieldIds": [45266, 45272],
       "label": "business category",
       "rules": [
-        { "team": "ServiceBlueprint", "cf": "Blueprint", "name": "Service Blueprint" },
         { "team": "ServiceBlueprint", "cf": "Execution Plan", "name": "Execution Plan" },
-        { "team": "ServiceBlueprint", "cf": "Fulfillment", "name": "Fulfillment" },
-        { "team": "ServiceBlueprint", "name": "Service Blueprint" },
-        { "team": "OnDemandQuota", "cf": "OnDemandQuota Ev2 extension", "name": "On-Demand Quota (Ev2)" },
-        { "team": "OnDemandQuota", "name": "On-Demand Quota" },
-        { "team": "plannedQuotas", "name": "Planned Quota" },
-        { "team": "Whitelist&Quota", "name": "Subscription Whitelisting" },
-        { "team": "SubscriptionWhitelisting", "name": "Subscription Whitelisting" },
-        { "team": "CIS-Ev2Bridge", "name": "CIS-Ev2 Bridge" }
+        { "team": "OnDemandQuota", "cf": "OnDemandQuota Ev2 extension", "name": "On Demand Quota (Ev2)" }
       ]
     }
   ],
-  "_notes": "The business-category custom field lives under two ids (45266, 45272) for different teams; both are listed in customFieldIds so a team's cf value is picked up regardless of which id holds it. To reclassify: edit the rules (add/rename business categories, merge teams by mapping to the same name, split a team by cf). No KQL change needed. Raw cf vocabulary seen: Blueprint, Execution Plan, Fulfillment (cf 45266); Other request related, Creating Request on Lionrock Portal, OnDemandQuota Ev2 extension (cf 45272). Most teams (Whitelist&Quota, SubscriptionWhitelisting, CIS-Ev2Bridge, plannedQuotas) set no cf, so they map by team alone."
+  "_notes": "Team display names are NOT configured here — they come from IcM automatically (iris icm.teamsById, backed by the on-call schedule TeamName). rules exist only to split a team by a custom field: here ServiceBlueprint's 'Execution Plan' and OnDemandQuota's Ev2 requests get their own category; everything else in those teams (and every other team) shows its IcM display name. The cf lives under two ids (45266, 45272) for different teams; both are listed in customFieldIds. Raw cf vocabulary seen: Blueprint, Execution Plan, Fulfillment (cf 45266); Other request related, Creating Request on Lionrock Portal, OnDemandQuota Ev2 extension (cf 45272). To split a team differently, add a rule; to merge/rename, add a rule with a shared name (a rule name overrides the IcM display name)."
 }

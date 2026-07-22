@@ -47,11 +47,14 @@ function render(s) {
   let md = `# IcM On-Call Weekly Summary\n\n`;
   md += `**Window:** ${w.weekStart} (Fri) to ${w.weekEnd} (Thu), Sydney time  |  **Source:** IcmDataWarehouse (time-series) + IcM on-call schedule API  |  **Team:** Region Access & Quota (Lionrock, IcM team ${cfg.team})\n\n`;
 
-  md += `## On-Call This Week\n\n| Role | Name | Alias | Shift Hours | Actual Hours |\n|---|---|---|--:|--:|\n`;
-  for (const p of primary) md += `| Primary | ${p.name} | ${p.alias} | ${p.hours} |  |\n`;
-  for (const p of secondary) md += `| Secondary | ${p.name} | ${p.alias} | ${p.hours} |  |\n`;
+  md += `## On-Call This Week\n\n| Role | Name | Alias | Shift Hours | Percentage |\n|---|---|---|--:|--:|\n`;
+  for (const p of primary) md += `| Primary | ${p.name} | ${p.alias} | ${p.hours} | 100% |\n`;
+  for (const p of secondary) md += `| Secondary | ${p.name} | ${p.alias} | ${p.hours} | 100% |\n`;
+  md += `\n_Percentage = share of the week spent on on-call; defaults to 100%, adjust to actual (e.g. 50% if split with other duties)._\n\n`;
 
-  md += `\n## Incident Activity\n\nCounts are **actions during the window**: New = created, Resolved = ResolveDate in window, Mitigated = MitigateDate in window. Transferred Out = created this week and moved to another owning team.\n\n`;
+  md += `## Highlighted IcMs\n\n_Top incidents this week, in priority order (1 = highest). Fill in manually._\n\n1. \n2. \n3. \n\n`;
+
+  md += `## Incident Activity\n\nCounts are **actions during the window**: New = created, Resolved = ResolveDate in window, Mitigated = MitigateDate in window. Transferred Out = created this week and moved to another owning team.\n\n`;
   md += `### Totals\n\n| New | Resolved | Mitigated | Transferred Out |\n|--:|--:|--:|--:|\n| ${tot("New")} | ${tot("Resolved")} | ${tot("Mitigated")} | ${transferredOut} |\n\n`;
 
   md += `### By ${dimLabels.join(" / ")}\n\n`;

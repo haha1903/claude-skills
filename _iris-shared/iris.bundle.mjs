@@ -60124,7 +60124,7 @@ function teamLeaf(team) {
   const i = s.lastIndexOf("\\");
   return i >= 0 ? s.slice(i + 1) : s;
 }
-function resolveComposite(team, cf, rules) {
+function resolveComposite(team, cf, rules, fallbackName) {
   const leaf = teamLeaf(team);
   const cfVal = cf == null ? "" : String(cf);
   for (const r of rules) {
@@ -60132,7 +60132,7 @@ function resolveComposite(team, cf, rules) {
     if (r.cf != null && r.cf !== cfVal) continue;
     return r.name;
   }
-  return leaf;
+  return fallbackName && fallbackName.trim() ? fallbackName : leaf;
 }
 function oncallSummaryKql(owningTenantId, w0, w1, customFieldIds = []) {
   const cfIds = customFieldIds.length ? customFieldIds.join(", ") : "-1";
@@ -60175,9 +60175,12 @@ function firstCf(row, dim) {
   }
   return "";
 }
-function dimValue(row, dim) {
+function dimValue(row, dim, teamNames) {
   if (dim.source === "customField") return firstCf(row, dim);
-  if (dim.source === "composite") return resolveComposite(row.OwningTeamName, firstCf(row, dim), dim.rules ?? []);
+  if (dim.source === "composite") {
+    const fallback = teamNames?.[Number(row.OwningTeamId)];
+    return resolveComposite(row.OwningTeamName, firstCf(row, dim), dim.rules ?? [], fallback);
+  }
   return row[dim.column ?? dim.key];
 }
 function applyValueMap(raw, dim) {
@@ -60185,10 +60188,10 @@ function applyValueMap(raw, dim) {
   if (s === "") return `(no ${dim.label ?? dim.key})`;
   return dim.valueMap?.[s] ?? s;
 }
-function aggregateSummary(rows, dimensions) {
+function aggregateSummary(rows, dimensions, teamNames) {
   const acc = /* @__PURE__ */ new Map();
   for (const r of rows) {
-    const groups = dimensions.map((d) => applyValueMap(dimValue(r, d), d));
+    const groups = dimensions.map((d) => applyValueMap(dimValue(r, d, teamNames), d));
     const key = groups.join("\0");
     let g = acc.get(key);
     if (!g) {
@@ -60219,7 +60222,16 @@ async function oncallSummary(teamId, owningTenantId, opts) {
   const kql = oncallSummaryKql(owningTenantId, startUtc, endUtc, cfIds);
   const { rows } = await queryKusto(cluster, WAREHOUSE_DB, kql, opts.timeout ?? 300);
   const summaryRows = rows;
-  const groups = aggregateSummary(summaryRows, opts.dimensions);
+  let teamNames;
+  if (opts.dimensions.some((d) => d.source === "composite")) {
+    const ids = [...new Set(summaryRows.map((r) => Number(r.OwningTeamId)).filter((n) => Number.isFinite(n)))];
+    try {
+      const teams = await teamsById(ids, opts.timeout ?? 30);
+      teamNames = Object.fromEntries(teams.map((t) => [t.teamId, t.name]));
+    } catch {
+    }
+  }
+  const groups = aggregateSummary(summaryRows, opts.dimensions, teamNames);
   const transferredOut = summaryRows.filter((r) => r.IsTransferred).length;
   const weeks = await oncallRoster(teamId, {
     start: new Date(startUtc),
