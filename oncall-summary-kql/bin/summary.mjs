@@ -45,7 +45,7 @@ validateSnippet(cfg.categoryKql ?? "");
 const { weekStart, weekEnd, startUtc, endUtc } = resolveWeek(new Date(), tz, weekStartDay, weekOffset);
 
 // ── run the grouped query ──────────────────────────────────────────────────────
-const kql = buildKql(cfg.owningTenantId, startUtc, endUtc, cfIds, cfg.categoryKql, groupBy);
+const kql = buildKql(cfg.owningTenantId, startUtc, endUtc, cfIds, cfg.categoryKql, groupBy, cfg.teamDisplayNames);
 const { rows } = await queryKusto(cfg.cluster, cfg.database ?? "IcmDataWarehouse", kql);
 
 const md = render(rows);
@@ -61,7 +61,9 @@ function render(rows) {
   let md = `# IcM On-Call Weekly Summary\n\n`;
   md += `**Window:** ${weekStart} (Fri) to ${weekEnd} (Thu), ${tz}  |  **Source:** IcmDataWarehouse (time-series)  |  **Team:** ${cfg.teamName ?? "(team)"}\n\n`;
   md += `## On-Call This Week\n\n_Fill in manually — the IcM on-call schedule needs service-identity access this standalone report does not use._\n\n`;
-  md += `| Role | Name | Alias | Actual Hours |\n|---|---|---|--:|\n| Primary |  |  |  |\n| Secondary |  |  |  |\n\n`;
+  md += `| Role | Name | Alias | Percentage |\n|---|---|---|--:|\n| Primary |  |  | 100% |\n| Secondary |  |  | 100% |\n\n`;
+  md += `_Percentage = share of the week spent on on-call; defaults to 100%, adjust to actual (e.g. 50% if split with other duties)._\n\n`;
+  md += `## Highlighted IcMs\n\n_Top incidents this week, in priority order (1 = highest). Fill in manually._\n\n1. \n2. \n3. \n\n`;
   md += `## Incident Activity\n\nCounts are **actions during the window**: New = created, Resolved = ResolveDate in window, Mitigated = MitigateDate in window. Transferred Out = created this week and moved to another owning team.\n\n`;
   md += `### Totals\n\n| New | Resolved | Mitigated | Transferred Out |\n|--:|--:|--:|--:|\n| ${tot("New")} | ${tot("Resolved")} | ${tot("Mitigated")} | ${tot("TransferredOut")} |\n\n`;
   md += `### By ${label}\n\n| ${cap(label)} | New | Resolved | Mitigated |\n|---|--:|--:|--:|\n`;
@@ -73,11 +75,20 @@ function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
 // ── KQL builder ─────────────────────────────────────────────────────────────────
 // Data layer prepares one row per in-window incident with the action flags,
-// TeamLeaf, and each declared cf_<id>; then the user snippet computes `groupBy`;
-// then a fixed summarize counts the four actions per category.
-function buildKql(tenant, w0, w1, cfIds, snippet, groupBy) {
+// TeamLeaf, a TeamDisplay column (TeamLeaf mapped through teamDisplayNames), and
+// each declared cf_<id>. Then the user snippet (if any) computes `groupBy`; if the
+// snippet is empty, Category defaults to TeamDisplay. Then a fixed summarize counts
+// the four actions per category.
+function buildKql(tenant, w0, w1, cfIds, snippet, groupBy, teamDisplayNames) {
   const cfList = cfIds.length ? cfIds.join(", ") : "-1";
   const cfExtend = cfIds.map((id) => `| extend cf_${id} = tostring(cf_bag["${id}"])`).join("\n");
+  // TeamLeaf -> friendly display name via config map; unmapped falls back to TeamLeaf.
+  const dnPairs = Object.entries(teamDisplayNames ?? {});
+  const teamDisplayExtend = dnPairs.length
+    ? `| extend TeamDisplay = case(${dnPairs.map(([k, v]) => `TeamLeaf == '${kqlStr(k)}', '${kqlStr(v)}'`).join(", ")}, TeamLeaf)`
+    : `| extend TeamDisplay = TeamLeaf`;
+  // If no user snippet, group by the display name directly.
+  const categoryStep = (snippet && snippet.trim()) ? snippet : `| extend ${groupBy} = TeamDisplay`;
   return `
 let W0 = datetime(${w0});
 let W1 = datetime(${w1});
@@ -104,8 +115,9 @@ snap
 | where IsNew or IsResolved or IsMitigated or IsTransferred
 | join kind=leftouter cf on IncidentId
 | extend TeamLeaf = tostring(split(OwningTeamName, '\\\\')[-1])
+${teamDisplayExtend}
 ${cfExtend}
-${snippet}
+${categoryStep}
 | summarize New = countif(IsNew), Resolved = countif(IsResolved),
             Mitigated = countif(IsMitigated), TransferredOut = countif(IsTransferred)
     by ${groupBy}
@@ -173,3 +185,5 @@ function validateGroupBy(name) {
 function validateSnippet(snippet) {
   if (snippet.includes(";") || snippet.includes("`")) { console.error("categoryKql must be a single pipeline (no ';' or backtick)."); process.exit(2); }
 }
+// Escape a JS string for use inside a KQL single-quoted literal.
+function kqlStr(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }
