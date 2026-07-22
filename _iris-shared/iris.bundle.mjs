@@ -59495,6 +59495,7 @@ __export(icm_exports, {
   parseODataResponse: () => parseODataResponse,
   parseOncall: () => parseOncall,
   parseOncallRoster: () => parseOncallRoster,
+  parseTeams: () => parseTeams,
   pendingActions: () => pendingActions,
   pendingActionsApi2: () => pendingActionsApi2,
   pendingByFamily: () => pendingByFamily,
@@ -59509,6 +59510,7 @@ __export(icm_exports, {
   savedQueryIncidents: () => savedQueryIncidents,
   sharedQueryIncidents: () => sharedQueryIncidents,
   teamLeaf: () => teamLeaf,
+  teamsById: () => teamsById,
   transfer: () => transfer,
   update: () => update
 });
@@ -59983,6 +59985,19 @@ function isoZ(d) {
 function slotHours(start, end) {
   return (new Date(end).getTime() - new Date(start).getTime()) / 36e5;
 }
+function unescapeHtml(s) {
+  return s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+}
+function parseTeams(raw) {
+  const value = raw?.value ?? [];
+  return value.map((t) => ({
+    teamId: Number(t.TeamId),
+    name: unescapeHtml(String(t.TeamName ?? "")),
+    email: String(t.TeamEmailAddress ?? ""),
+    timeZoneId: String(t.TimeZoneId ?? ""),
+    maxBackupsCount: Number(t.MaxBackupsCount ?? 0)
+  }));
+}
 function parseOncallRoster(raw) {
   const value = raw?.value ?? [];
   const out = [];
@@ -60090,6 +60105,19 @@ async function oncallRoster(teamId, opts = {}) {
   );
   const slots = parseOncallRoster(raw);
   return aggregateOncallByWeek(slots, opts.timeZone ?? "UTC", opts.weekStartDay ?? 5, opts.daytime);
+}
+async function teamsById(teamIds, timeout = 30) {
+  if (!teamIds.length) return [];
+  const now = /* @__PURE__ */ new Date();
+  const start = isoZ(now);
+  const end = isoZ(new Date(now.getTime() + 36e5));
+  const raw = await icmRest(
+    "POST",
+    ONCALL_ENDPOINT,
+    { TeamIds: teamIds.map(Number), StartTime: start, EndTime: end },
+    timeout
+  );
+  return parseTeams(raw);
 }
 function teamLeaf(team) {
   const s = team == null ? "" : String(team);
