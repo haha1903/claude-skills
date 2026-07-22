@@ -60,9 +60,11 @@ function render(s) {
   md += `### By ${dimLabels.join(" / ")}\n\n`;
   md += `| ${dimLabels.map(cap).join(" | ")} | New | Resolved | Mitigated |\n`;
   md += `|${dimLabels.map(() => "---").join("|")}|--:|--:|--:|\n`;
+  // Sort by New desc (busiest category first); tie-break by group path.
+  const rowsSorted = [...groups].sort((a, b) => b.New - a.New || a.groups.join(" ").localeCompare(b.groups.join(" ")));
   // Collapse repeated leading group cells (only show a top-level value once).
   let prevTop = null;
-  for (const g of groups) {
+  for (const g of rowsSorted) {
     const cells = g.groups.map((v, i) => (i === 0 && v === prevTop ? "" : v));
     prevTop = g.groups[0];
     md += `| ${cells.join(" | ")} | ${g.New} | ${g.Resolved} | ${g.Mitigated} |\n`;

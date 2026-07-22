@@ -67,7 +67,8 @@ function render(rows) {
   md += `## Incident Activity\n\nCounts are **actions during the window**: New = created, Resolved = ResolveDate in window, Mitigated = MitigateDate in window. Transferred Out = created this week and moved to another owning team.\n\n`;
   md += `### Totals\n\n| New | Resolved | Mitigated | Transferred Out |\n|--:|--:|--:|--:|\n| ${tot("New")} | ${tot("Resolved")} | ${tot("Mitigated")} | ${tot("TransferredOut")} |\n\n`;
   md += `### By ${label}\n\n| ${cap(label)} | New | Resolved | Mitigated |\n|---|--:|--:|--:|\n`;
-  const sorted = [...rows].sort((a, b) => String(a[groupBy]).localeCompare(String(b[groupBy])));
+  // Sort by New desc (busiest category first); tie-break by category name.
+  const sorted = [...rows].sort((a, b) => num(b.New) - num(a.New) || String(a[groupBy]).localeCompare(String(b[groupBy])));
   for (const r of sorted) md += `| ${r[groupBy]} | ${num(r.New)} | ${num(r.Resolved)} | ${num(r.Mitigated)} |\n`;
   return md;
 }
