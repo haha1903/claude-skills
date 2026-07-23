@@ -1,5 +1,5 @@
 {
-  "_comment": "Standalone weekly IcM incident-activity summary (no iris). Auth is plain `az`. Rows are grouped into a Category column. By default Category = the team's display name (from teamDisplayNames below); the categoryKql snippet can override that for teams that need finer splits by a custom field. Counts are fixed (New/Resolved/Mitigated + a Transferred-Out total).",
+  "_comment": "Standalone weekly IcM incident-activity summary (no iris). Auth is plain `az`. Rows are grouped into a Category column computed entirely by categoryKql below (a KQL case() — first matching branch wins). Edit categoryKql to reclassify; each branch is on its own line with a comment so it is easy to change. Counts are fixed (New/Resolved/Mitigated + a Transferred-Out total).",
 
   "cluster": "https://icmcluster.kusto.windows.net",
   "database": "IcmDataWarehouse",
@@ -10,22 +10,24 @@
 
   "groupBy": "Category",
   "categoryLabel": "category",
-  "customFieldIds": [45266, 45272],
+  "customFieldIds": [45269],
 
-  "teamDisplayNames": {
-    "Whitelist&Quota": "Region Access & Quota",
-    "SubscriptionWhitelisting": "CIS RPs",
-    "CIS-Ev2Bridge": "CIS-Ev2 Bridge",
-    "ServiceBlueprint": "Service Blueprint",
-    "OnDemandQuota": "On Demand Quota",
-    "plannedQuotas": "plannedQuotas",
-    "BET": "Billing Meter (and BET)",
-    "Triage": "Triage"
-  },
+  "_categoryKqlNote": "categoryKql is an array of lines joined with newlines into a KQL `case()` (first match wins). Each classification line is followed by its own `// ...` KQL comment so it is easy to read and edit. Keep the final 'Other' as the last-resort fallback.",
+  "categoryKql": [
+    "| extend Category = case(",
+    "  OwningTeamId == 67250 and isnotempty(MonitorId), 'Monitor',   // Geneva-monitor incidents on the Region Access & Quota team (67250); mirrors the IcM 'monitor' shared query",
+    "  TeamLeaf == 'ServiceBlueprint', 'Planned Quota',              // Planned Quota: ServiceBlueprint team",
+    "  TeamLeaf == 'plannedQuotas', 'Planned Quota',                 // Planned Quota: plannedQuotas team",
+    "  cf_45269 == 'PlannedQuota', 'Planned Quota',                  // Planned Quota: CIS RP incident whose RP name (cf 45269) is PlannedQuota",
+    "  isnotempty(cf_45269), cf_45269,                               // RP name: CIS RP incident tagged with an RP name -> use it (Subscription, PreApprovedQuota, ...)",
+    "  TeamLeaf == 'BET', 'Billing Meter',                           // Billing Meter: BET team",
+    "  TeamLeaf == 'SubscriptionWhitelisting', 'CIS RPs',            // CIS RP incidents with no RP name (mostly on-demand provision jobs)",
+    "  TeamLeaf == 'CIS-Ev2Bridge', 'CIS-Ev2 Bridge',                // CIS-Ev2 Bridge team",
+    "  TeamLeaf == 'OnDemandQuota', 'On Demand Quota',               // On Demand Quota team",
+    "  'Other')                                                      // last resort: Triage and any other/unknown team"
+  ],
 
-  "categoryKql": "| extend Category = case(TeamLeaf == 'ServiceBlueprint' and cf_45266 == 'Execution Plan', 'Execution Plan', TeamLeaf == 'OnDemandQuota' and cf_45272 == 'OnDemandQuota Ev2 extension', 'On Demand Quota (Ev2)', TeamDisplay)",
-
-  "_howToClassify": "Two knobs. (1) teamDisplayNames: a { TeamLeaf -> display name } map. These are the IcM team display names (from the IcM team record, e.g. Whitelist&Quota -> 'Region Access & Quota', SubscriptionWhitelisting -> 'CIS RPs'), NOT the backslashed OwningTeamName. Default Category = the team's display name; unmapped teams fall back to their raw leaf. Edit to rename, or merge two teams into one category by mapping both leaves to the same name. (2) categoryKql (optional): a KQL '| extend Category = ...' snippet for teams that need a finer split by a custom field; end its case() with TeamDisplay so unsplit teams keep their display name. If categoryKql is omitted, Category is just TeamDisplay. Available inputs: TeamLeaf, TeamDisplay, OwningTeamName, Severity, Status, IncidentType, MonitorId, IsNew/IsResolved/IsMitigated/IsTransferred, cf_<id> for each id in customFieldIds. To classify by a DIFFERENT cf, add its id to customFieldIds and branch on cf_<id>. To refresh display names: they come from IcM's team record (iris icm.teamsById, or the GetOnCallScheduleForTeams TeamName field).",
-  "_cfVocab": "Seen values — cf 45266: Blueprint, Execution Plan, Fulfillment. cf 45272: Other request related, Creating Request on Lionrock Portal, OnDemandQuota Ev2 extension. cf 45269 (RPName): Subscription, PlannedQuota, PreApprovedQuota. Most teams set no cf and map by team alone.",
+  "_howToClassify": "All grouping lives in categoryKql — a KQL '| extend Category = case(...)' snippet, first matching branch wins, each branch on its own commented line. Structure: first the semantic buckets (Monitor, Planned Quota, RP name, Billing Meter), then a branch per remaining team mapping its leaf to the team display name, then 'Other' only as a true last resort for unknown teams. Team display names are hard-coded here (SubscriptionWhitelisting->CIS RPs, Whitelist&Quota->Region Access & Quota, CIS-Ev2Bridge->CIS-Ev2 Bridge, OnDemandQuota->On Demand Quota, ...); refresh from IcM's team record if a team is renamed (iris icm.teamsById, or GetOnCallScheduleForTeams TeamName). Available inputs per incident: TeamLeaf (OwningTeamName after the last backslash), OwningTeamId (numeric), MonitorId (non-empty = raised by a Geneva monitor), OwningTeamName, Severity, Status, IncidentType, IsNew/IsResolved/IsMitigated/IsTransferred, and cf_<id> for each id in customFieldIds (here cf_45269 = RP name). To reclassify: add/reorder branches.",
+  "_cfVocab": "cf 45269 (RP name): Subscription, PlannedQuota, PreApprovedQuota. (Other cfs seen but not used here: 45266 Blueprint/Execution Plan/Fulfillment; 45272 OnDemandQuota Ev2 extension.)",
   "_auth": "Run `az login` as a user with IcM Kusto warehouse read access. The warehouse (icmcluster.kusto.windows.net) accepts the signed-in user's token; no cert, no iris."
 }

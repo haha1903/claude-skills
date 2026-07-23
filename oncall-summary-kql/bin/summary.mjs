@@ -30,9 +30,11 @@ const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : def; };
 const weekOffset = Number(arg("--week", "1"));
 const configPath = arg("--config", path.join(__dir, "..", "config", "config.json"));
-// Default output = the enclosing git repo root (so it lands in the project, not
-// wherever cwd happens to be); fall back to cwd if not inside a repo.
-const outDir = arg("--out", repoRoot(process.cwd()) ?? process.cwd());
+// Default output = <repo root>/docs/oncall-summary (so reports land in the
+// project's docs, not wherever cwd happens to be); fall back to cwd/docs if not
+// inside a repo. Created if missing.
+const root = repoRoot(process.cwd());
+const outDir = arg("--out", path.join(root ?? process.cwd(), "docs", "oncall-summary"));
 
 /** Walk up from `dir` to the nearest ancestor containing a .git entry; null if none. */
 function repoRoot(dir) {
@@ -50,19 +52,24 @@ const tz = cfg.timeZone ?? "Australia/Sydney";
 const weekStartDay = cfg.weekStartDay ?? 5; // Friday
 const groupBy = cfg.groupBy ?? "Category";
 const cfIds = cfg.customFieldIds ?? [];
+// categoryKql may be a string or an array of lines (each line typically one
+// `condition, value,` case branch, optionally with a trailing // comment). Arrays
+// are joined with newlines so the config stays readable + commentable (JSONC).
+const categoryKql = Array.isArray(cfg.categoryKql) ? cfg.categoryKql.join("\n") : (cfg.categoryKql ?? "");
 
 validateGroupBy(groupBy);
-validateSnippet(cfg.categoryKql ?? "");
+validateSnippet(categoryKql);
 
 // ── resolve the on-call week window (Fri->Thu by default) in the given tz ──────
 const { weekStart, weekEnd, startUtc, endUtc } = resolveWeek(new Date(), tz, weekStartDay, weekOffset);
 
 // ── run the grouped query ──────────────────────────────────────────────────────
-const kql = buildKql(cfg.owningTenantId, startUtc, endUtc, cfIds, cfg.categoryKql, groupBy, cfg.teamDisplayNames);
+const kql = buildKql(cfg.owningTenantId, startUtc, endUtc, cfIds, categoryKql, groupBy, cfg.teamDisplayNames);
 const { rows } = await queryKusto(cfg.cluster, cfg.database ?? "IcmDataWarehouse", kql);
 
 const md = render(rows);
 const out = path.join(outDir, `OnCall_IcM_Summary_${weekStart}_to_${weekEnd}.md`);
+await fs.mkdir(outDir, { recursive: true });
 await fs.writeFile(out, md);
 console.log(out);
 
@@ -73,11 +80,10 @@ function render(rows) {
   const label = cfg.categoryLabel ?? groupBy;
   let md = `# IcM On-Call Weekly Summary\n\n`;
   md += `**Window:** ${weekStart} (Fri) to ${weekEnd} (Thu), ${tz}  |  **Source:** IcmDataWarehouse (time-series)  |  **Team:** ${cfg.teamName ?? "(team)"}\n\n`;
-  md += `## On-Call This Week\n\n_Fill in manually — the IcM on-call schedule needs service-identity access this standalone report does not use._\n\n`;
-  md += `| Role | Name | Alias | Percentage |\n|---|---|---|--:|\n| Primary |  |  | 100% |\n| Secondary |  |  | 100% |\n\n`;
-  md += `_Percentage = share of the week spent on on-call; defaults to 100%, adjust to actual (e.g. 50% if split with other duties)._\n\n`;
-  md += `## Highlighted IcMs\n\n_Top incidents this week, in priority order (1 = highest). Fill in manually._\n\n1. \n2. \n3. \n\n`;
-  md += `## Incident Activity\n\nCounts are **actions during the window**: New = created, Resolved = ResolveDate in window, Mitigated = MitigateDate in window. Transferred Out = created this week and moved to another owning team.\n\n`;
+  md += `## On-Call This Week\n\n`;
+  md += `| Role | Name | Alias | Percentage |\n|---|---|---|--:|\n| Primary |  |  | x% |\n| Secondary |  |  | x% |\n\n`;
+  md += `## Highlights\n\n1. \n2. \n3. \n\n`;
+  md += `## Incident Activity\n\n`;
   md += `### Totals\n\n| New | Resolved | Mitigated | Transferred Out |\n|--:|--:|--:|--:|\n| ${tot("New")} | ${tot("Resolved")} | ${tot("Mitigated")} | ${tot("TransferredOut")} |\n\n`;
   md += `### By ${label}\n\n| ${cap(label)} | New | Resolved | Mitigated |\n|---|--:|--:|--:|\n`;
   // Sort by New desc (busiest category first); tie-break by category name.
@@ -197,7 +203,10 @@ function validateGroupBy(name) {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) { console.error(`Invalid groupBy column name: ${name}`); process.exit(2); }
 }
 function validateSnippet(snippet) {
-  if (snippet.includes(";") || snippet.includes("`")) { console.error("categoryKql must be a single pipeline (no ';' or backtick)."); process.exit(2); }
+  // Strip // line comments first so a ';' inside a comment doesn't trip the guard;
+  // we only forbid a statement-terminating ';' (or backtick) in actual code.
+  const code = snippet.replace(/\/\/[^\n]*/g, "");
+  if (code.includes(";") || code.includes("`")) { console.error("categoryKql must be a single pipeline (no ';' or backtick in code)."); process.exit(2); }
 }
 // Escape a JS string for use inside a KQL single-quoted literal.
 function kqlStr(s) { return String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'"); }

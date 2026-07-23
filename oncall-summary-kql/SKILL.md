@@ -60,16 +60,20 @@ Available inputs per incident:
 - `cf_<id>` — one column per id you list in `customFieldIds`
 - `IsNew`, `IsResolved`, `IsMitigated`, `IsTransferred`
 
-Examples:
-- **Merge teams** into one category → map both `TeamLeaf`s to the same string
-  (today Whitelist&Quota + SubscriptionWhitelisting → `Subscription Whitelisting`).
-- **Split a team by a custom field** → branch on `cf_<id>` (today ServiceBlueprint
-  splits by `cf_45266` into Blueprint / Execution Plan).
+The default `categoryKql` (first matching branch wins, each on its own commented line):
+1. `isnotempty(MonitorId)` → **Monitor** (anything a Geneva monitor raised)
+2. `ServiceBlueprint` / `plannedQuotas` teams, or `cf_45269 == 'PlannedQuota'` → **Planned Quota**
+3. `isnotempty(cf_45269)` → the RP name itself (e.g. Subscription, PreApprovedQuota)
+4. `TeamLeaf == 'BET'` → **Billing Meter**
+5. else → **Other**
+
+Editing examples:
+- **Rename / merge** → change the string a branch returns; two branches returning
+  the same string merge into one row.
+- **New bucket by team** → add `TeamLeaf == '<leaf>', '<Name>'` above the `'Other'`.
 - **Classify by a different custom field** → add its id to `customFieldIds` and
-  branch on `cf_<id>`. E.g. `cf_45269` (RPName) has Subscription / PlannedQuota /
-  PreApprovedQuota.
-- **Fallback** → end the `case(...)` with a bare `TeamLeaf` so unmatched incidents
-  show their raw team.
+  branch on `cf_<id>`.
+- **Always keep `'Other'` as the final fallback** (no bare-column fallback).
 
 No script edit needed — only `config.json`.
 
