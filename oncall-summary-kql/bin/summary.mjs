@@ -9,7 +9,7 @@
  *   summary.mjs [--week N] [--config path] [--out dir]
  *     --week N   0 = current on-call week, 1 = last full week (default 1), ...
  *     --config   config file (default ../config/config.json)
- *     --out      output dir for the .md (default cwd)
+ *     --out      output dir for the .md (default: enclosing git repo root, else cwd)
  *
  * Writes OnCall_IcM_Summary_<start>_to_<end>.md and prints its path.
  * Needs: az login (a user with IcM Kusto warehouse access) + network to the cluster.
@@ -18,7 +18,7 @@
  * needs IcM service-identity auth which this standalone skill deliberately avoids.
  * The report leaves a placeholder for it.
  */
-import { promises as fs } from "node:fs";
+import { promises as fs, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
@@ -30,7 +30,20 @@ const argv = process.argv.slice(2);
 const arg = (name, def) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : def; };
 const weekOffset = Number(arg("--week", "1"));
 const configPath = arg("--config", path.join(__dir, "..", "config", "config.json"));
-const outDir = arg("--out", process.cwd());
+// Default output = the enclosing git repo root (so it lands in the project, not
+// wherever cwd happens to be); fall back to cwd if not inside a repo.
+const outDir = arg("--out", repoRoot(process.cwd()) ?? process.cwd());
+
+/** Walk up from `dir` to the nearest ancestor containing a .git entry; null if none. */
+function repoRoot(dir) {
+  let d = path.resolve(dir);
+  for (;;) {
+    if (existsSync(path.join(d, ".git"))) return d;
+    const parent = path.dirname(d);
+    if (parent === d) return null;
+    d = parent;
+  }
+}
 
 const cfg = JSON.parse(await fs.readFile(configPath, "utf8"));
 const tz = cfg.timeZone ?? "Australia/Sydney";

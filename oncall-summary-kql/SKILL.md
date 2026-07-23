@@ -24,7 +24,7 @@ node <skill>/bin/summary.mjs [--week N] [--config path] [--out dir]
 
 - `--week N` — `0` = current on-call week, `1` = last full week (**default**), `2` = two weeks ago, ...
 - `--config` — config file (default `config/config.json`)
-- `--out` — output dir (default cwd)
+- `--out` — output dir (default: the enclosing git repo root, else cwd)
 
 Writes `OnCall_IcM_Summary_<start>_to_<end>.md` and prints its path. Review it.
 
