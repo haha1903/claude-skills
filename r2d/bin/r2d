@@ -203,6 +203,9 @@ log(`build    : ${buildNumber ?? "?"} (id ${buildId})`);
 // under Azure Build Out Automation), and a request does not record which pipeline
 // it came from. So walk the approved requests newest-first and keep the first one
 // whose build number exists in THIS pipeline's runs.
+//
+// The build being deployed is excluded: re-releasing a build that already shipped
+// is allowed, but ABH cannot diff a build against itself and returns no summary.
 
 const history = await safefly.listRequests({
   serviceId: pipeline.serviceId,
@@ -212,15 +215,21 @@ const history = await safefly.listRequests({
 const approved = history.data.filter(
   (r) => (r.currentState ?? "").toLowerCase() === "approved" && r.buildVersion,
 );
-const prev = approved.find((r) => runByNum.has(r.buildVersion));
+const prev = approved.find(
+  (r) => runByNum.has(r.buildVersion) && String(runByNum.get(r.buildVersion).id) !== String(buildId),
+);
 
 if (!prev) {
+  const self = approved.filter((r) => String(runByNum.get(r.buildVersion)?.id) === String(buildId));
   const seen = approved.slice(0, 6).map((r) => `${r.displayId}=${r.buildVersion}`).join(", ");
   die(
-    `no approved request found whose build belongs to ${pipeline.name}`,
-    `${approved.length} approved requests exist for ${pipeline.serviceName}, but none of\n` +
-      `their builds are in this pipeline's last 200 runs. Several pipelines share this\n` +
-      `service, so the history is mixed.\n` +
+    `no approved request found whose build belongs to ${pipeline.name} and differs from ${buildNumber ?? buildId}`,
+    `${approved.length} approved requests exist for ${pipeline.serviceName}.\n` +
+      (self.length
+        ? `${self.map((r) => r.displayId).join(", ")} already shipped this exact build, and ABH\n` +
+          `cannot diff a build against itself. Pick a different build, or wait for a newer one.\n`
+        : `None of their builds are in this pipeline's last 200 runs -- several pipelines\n` +
+          `share this service, so the history is mixed.\n`) +
       (seen ? `  recent: ${seen}\n` : "") +
       `\nIf this pipeline has never shipped through SafeFly V2, create the first request\n` +
       `in the portal; ABH needs a previous build to diff against.`,
