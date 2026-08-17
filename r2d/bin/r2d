@@ -77,6 +77,27 @@ const die = (msg, hint) => {
   process.exit(1);
 };
 
+/**
+ * Report what went wrong in one line instead of dumping a 30-line undici stack.
+ * These calls cross a VPN, and a transient connect timeout otherwise looks like
+ * a crash in the tool.
+ */
+process.on("uncaughtException", (e) => {
+  const cause = e?.cause;
+  const code = cause?.code ?? cause?.cause?.code ?? e?.code;
+  if (code === "UND_ERR_CONNECT_TIMEOUT" || code === "ETIMEDOUT" || code === "ENOTFOUND" || code === "ECONNRESET") {
+    die(
+      `network call failed (${code})`,
+      `SafeFly, ABH and ADO are all reachable only on the corporate network.\n` +
+        `Check the VPN and retry -- these timeouts are usually transient.`,
+    );
+  }
+  die(e?.message ?? String(e), e?.stack?.split("\n").slice(1, 4).join("\n"));
+});
+process.on("unhandledRejection", (e) => {
+  throw e instanceof Error ? e : new Error(String(e));
+});
+
 /** Is there a terminal we can prompt on? /dev/tty exists even when stdin is piped. */
 function hasTty() {
   try {
@@ -397,15 +418,27 @@ const draft = await safefly.saveRequest({
 });
 log(`draft    : ${draft.displayId} (${draft.id})`);
 
-// Question ids are per-form, so map names now that the draft carries the form.
-// DynamicChoice questions store a JSON array even when a single value is picked
-// (that is how the portal writes them); Text/Boolean questions store a scalar.
+/**
+ * Which answers SafeFly stores as a JSON array. This cannot be derived from the
+ * question's type or renderType: `ev2.servicegroup` and `ev2.build` are both
+ * DynamicChoice/ManualEntry, yet the portal writes the first as
+ * ["..."] and the second as a bare scalar.
+ *
+ * Getting ev2.build wrong is not cosmetic. SafeFly surfaces it as the request's
+ * `buildVersion`, which is how this tool later finds "what shipped last" -- an
+ * array-wrapped value never matches a pipeline run's build number, so the next
+ * run for the same pipeline cannot find its own history.
+ *
+ * Verified against 15.3432, a request created through the portal.
+ */
+const ARRAY_ENCODED = new Set(["ev2.servicegroup", "core.regions"]);
+
 const answers = [];
 const unknown = [];
 for (const [name, value] of Object.entries(wanted)) {
   const q = (draft.questions ?? []).find((x) => x.name === name);
   if (!q) { unknown.push(name); continue; }
-  const encoded = q.type === "DynamicChoice" ? JSON.stringify([String(value)]) : String(value);
+  const encoded = ARRAY_ENCODED.has(name) ? JSON.stringify([String(value)]) : String(value);
   answers.push({ questionId: q.id, value: encoded });
 }
 if (unknown.length) log(`warn     : no question on this form for ${unknown.join(", ")}`);

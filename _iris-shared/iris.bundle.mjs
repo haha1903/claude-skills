@@ -72507,20 +72507,22 @@ async function releaseContext(ref) {
   return abhGet(`/release/${org}/${projectId}/${buildId}/context`);
 }
 function ev2Unit(ctx) {
-  return (ctx.deploymentUnits ?? []).find((u) => (u.orchestrator ?? "").toLowerCase() === "ev2");
+  const ev2 = (ctx.deploymentUnits ?? []).filter((u) => (u.orchestrator ?? "").toLowerCase() === "ev2");
+  return ev2.find((u) => Boolean(u.name)) ?? ev2[0];
 }
 function ev2Regions(ctx) {
-  const unit = ev2Unit(ctx);
+  const units = (ctx.deploymentUnits ?? []).filter((u) => (u.orchestrator ?? "").toLowerCase() === "ev2");
   const out = /* @__PURE__ */ new Set();
-  for (const sel of unit?.metadata?.selectors ?? []) {
-    for (const r of sel.regions ?? []) if (r) out.add(r);
-  }
-  if (out.size === 0) {
-    const expr = unit?.metadata?.selectExpression ?? "";
-    const m = /regions\(([^)]*)\)/i.exec(expr);
-    for (const r of (m?.[1] ?? "").split(",")) {
-      const t = r.trim();
-      if (t) out.add(t);
+  for (const unit of units) {
+    for (const sel of unit.metadata?.selectors ?? []) {
+      for (const r of sel.regions ?? []) if (r) out.add(r);
+    }
+    const expr = unit.metadata?.selectExpression ?? "";
+    for (const m of expr.matchAll(/regions\(([^)]*)\)/gi)) {
+      for (const r of (m[1] ?? "").split(",")) {
+        const t = r.trim();
+        if (t) out.add(t);
+      }
     }
   }
   return [...out];

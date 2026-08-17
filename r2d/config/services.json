@@ -41,8 +41,8 @@
         "core.orchestrator_name": "EV2",
         "core.sdp": "Standard SDP",
         "core.rollback_strategy": "Manual (TSG)",
-        "core.health_monitoring": "True",
-        "ado.build_na": "False",
+        "core.health_monitoring": "true",
+        "ado.build_na": "false",
         "core.team_assessed_risk": "Low"
       }
     },
@@ -56,8 +56,8 @@
         "core.orchestrator_name": "EV2",
         "core.sdp": "Standard SDP",
         "core.rollback_strategy": "Manual (TSG)",
-        "core.health_monitoring": "True",
-        "ado.build_na": "False",
+        "core.health_monitoring": "true",
+        "ado.build_na": "false",
         "core.team_assessed_risk": "Low"
       },
       "ev2ServiceGroupFallback": "Microsoft.AzureGlobal.BuildoutAutomation.Lionrock.Prod.Incremental",
@@ -76,8 +76,8 @@
         "core.orchestrator_name": "EV2",
         "core.sdp": "Standard SDP",
         "core.rollback_strategy": "Manual (TSG)",
-        "core.health_monitoring": "True",
-        "ado.build_na": "False",
+        "core.health_monitoring": "true",
+        "ado.build_na": "false",
         "core.team_assessed_risk": "Low"
       },
       "ev2ServiceGroupFallback": "Microsoft.Lionrock.Ev2Extension.Incremental",
