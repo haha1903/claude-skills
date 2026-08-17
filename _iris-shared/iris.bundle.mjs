@@ -72034,6 +72034,7 @@ __export(safefly_exports, {
   gql: () => gql,
   hiddenQuestionNames: () => hiddenQuestionNames,
   lastApprovedBuild: () => lastApprovedBuild,
+  leaseCompatibility: () => leaseCompatibility,
   leaseCoversService: () => leaseCoversService,
   leaseIsActive: () => leaseIsActive,
   leaseTitlePrefix: () => leaseTitlePrefix,
@@ -72220,7 +72221,7 @@ function questionIdByName(req, name4) {
 }
 async function saveRequest(input, opts = {}) {
   const d = await gql(
-    `mutation($changeRequest: SaveRequestRequestBaseInput) {
+    `mutation($changeRequest: SaveRequestRequestBaseInput!) {
        saveRequest(changeRequest: $changeRequest) { ${REQUEST_FIELDS} }
      }`,
     { changeRequest: input },
@@ -72230,7 +72231,7 @@ async function saveRequest(input, opts = {}) {
 }
 async function submitRequest(input, opts = {}) {
   const d = await gql(
-    `mutation($changeRequest: SaveRequestRequestBaseInput) {
+    `mutation($changeRequest: SaveRequestRequestBaseInput!) {
        submitRequest(changeRequest: $changeRequest) { ${REQUEST_FIELDS} }
      }`,
     { changeRequest: input },
@@ -72240,7 +72241,7 @@ async function submitRequest(input, opts = {}) {
 }
 async function abandonRequest(changeRequestId, justification, opts = {}) {
   return gql(
-    `mutation($input: AbandonChangeRequestInputBaseInput) {
+    `mutation($input: AbandonChangeRequestInputBaseInput!) {
        abandonChangeRequest(input: $input) { id changeRequestId }
      }`,
     { input: { changeRequestId, justification } },
@@ -72276,36 +72277,51 @@ async function getLeaseRequestByDisplayId(displayId, opts = {}) {
   return d.leaseRequestByDisplayId;
 }
 async function findCompatibleLease(o, opts = {}) {
+  const props = o.requestProperties ?? (o.requestTitle ? [{ key: "CHANGE_REQUEST_TITLE", value: o.requestTitle }] : void 0);
   const d = await gql(
-    // formId is non-null in the schema, so it is inlined only when supplied. A
-    // draft does not exist yet at lease-probe time, and the lease bindings we
-    // care about (CHANGE_REQUEST_TITLE) do not depend on the form.
-    o.formId ? `query($franchiseId: ID!, $changeTypeId: ID!, $serviceId: ID!, $formId: ID!, $requestTitle: String) {
-           findCompatibleLease(franchiseId: $franchiseId, changeTypeId: $changeTypeId,
-                               serviceId: $serviceId, formId: $formId, requestTitle: $requestTitle) {
-             id displayId name requestExceptionType
-           }
-         }` : `query($franchiseId: ID!, $changeTypeId: ID!, $serviceId: ID!, $requestTitle: String) {
-           findCompatibleLease(franchiseId: $franchiseId, changeTypeId: $changeTypeId,
-                               serviceId: $serviceId, requestTitle: $requestTitle) {
-             id displayId name requestExceptionType
-           }
-         }`,
-    o.formId ? {
+    `query($franchiseId: ID!, $changeTypeId: ID!, $serviceId: ID!, $formId: ID!,
+           $requestTitle: String, $requestProperties: [RequestPropertyInputBaseInput!]) {
+       findCompatibleLease(franchiseId: $franchiseId, changeTypeId: $changeTypeId,
+                           serviceId: $serviceId, formId: $formId,
+                           requestTitle: $requestTitle, requestProperties: $requestProperties) {
+         id displayId name requestExceptionType
+       }
+     }`,
+    {
       franchiseId: o.franchiseId,
       changeTypeId: o.changeTypeId,
       serviceId: o.serviceId,
       formId: o.formId,
-      requestTitle: o.requestTitle
-    } : {
-      franchiseId: o.franchiseId,
-      changeTypeId: o.changeTypeId,
-      serviceId: o.serviceId,
-      requestTitle: o.requestTitle
+      requestTitle: o.requestTitle,
+      requestProperties: props
     },
     opts
   );
   return d.findCompatibleLease ?? null;
+}
+async function leaseCompatibility(o, opts = {}) {
+  const props = o.requestProperties ?? (o.requestTitle ? [{ key: "CHANGE_REQUEST_TITLE", value: o.requestTitle }] : void 0);
+  const d = await gql(
+    `query($leaseRequestId: ID!, $franchiseId: ID!, $changeTypeId: ID!, $serviceId: ID!,
+           $formId: ID!, $requestTitle: String, $requestProperties: [RequestPropertyInputBaseInput!]) {
+       leaseCompatibility(leaseRequestId: $leaseRequestId, franchiseId: $franchiseId,
+                          changeTypeId: $changeTypeId, serviceId: $serviceId, formId: $formId,
+                          requestTitle: $requestTitle, requestProperties: $requestProperties) {
+         status isCompatible failureReasons
+       }
+     }`,
+    {
+      leaseRequestId: o.leaseRequestId,
+      franchiseId: o.franchiseId,
+      changeTypeId: o.changeTypeId,
+      serviceId: o.serviceId,
+      formId: o.formId,
+      requestTitle: o.requestTitle,
+      requestProperties: props
+    },
+    opts
+  );
+  return d.leaseCompatibility ?? {};
 }
 async function listLeaseRequests(o = {}, opts = {}) {
   const filter = {};

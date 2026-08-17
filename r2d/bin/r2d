@@ -2,16 +2,18 @@
 /**
  * SafeFly V2 R2D automation (via iris safefly + abh).
  *
- *   r2d [--pipeline NAME] [--build ID] [--submit] [--json] [--dry-run]
+ *   r2d [--pipeline NAME] [--build ID] [--latest] [--draft] [--dry-run] [--json]
  *
- * Pipeline:
- *   1. pick the build to deploy (latest succeeded, or --build)
- *   2. ask SafeFly which build shipped last -> ABH comparison build
- *   3. ABH /context   -> ev2 service group + target regions
- *   4. ABH /summary   -> Copilot change title + description
- *   5. resolve the covering lease and its title prefix
- *   6. create the draft, save answers, attach the lease
- *   7. submit (only with --submit)
+ * Prompts for the pipeline and the build when they are not given, then:
+ *   1. ask SafeFly which build shipped last -> ABH comparison build
+ *   2. ABH /context   -> ev2 service group + target regions
+ *   3. ABH /summary   -> Copilot change title + description
+ *   4. resolve the covering lease and its title prefix
+ *   5. create the draft, save answers, attach the lease
+ *   6. submit
+ *
+ * Submitting is the DEFAULT. `--draft` stops after filling the request and
+ * `--dry-run` creates nothing at all.
  *
  * Refuses to proceed when no usable lease covers the request: without one the
  * request would silently fall back to full manual review.
@@ -38,9 +40,14 @@ const flag = (name) => argv.includes(`--${name}`);
 if (flag("help") || flag("h")) {
   console.log(`usage: r2d [options]
 
-  --pipeline NAME   pipeline from config/services.json (default: first entry)
-  --build ID        ADO build id to deploy (default: latest succeeded)
-  --submit          submit for approval; without this the draft is left for review
+Creates and submits a SafeFly V2 R2D request. With no arguments it prompts for
+the pipeline and the build, then creates AND SUBMITS. Use --dry-run to see the
+plan first, or --draft to stop before submitting.
+
+  --pipeline NAME   pipeline from config/services.json (prompts if omitted)
+  --build ID        ADO build id to deploy (prompts if omitted)
+  --latest          skip the build prompt, take the newest succeeded build
+  --draft           create and fill the request but do NOT submit
   --dry-run         resolve everything, print the plan, create nothing
   --json            machine-readable output
   --list            list configured pipelines and exit
@@ -59,7 +66,8 @@ if (flag("list")) {
 
 const asJson = flag("json");
 const dryRun = flag("dry-run");
-const doSubmit = flag("submit");
+// Submitting is the default; --draft opts out. --dry-run implies no submit.
+const doSubmit = !dryRun && !flag("draft");
 
 // Human-facing progress goes to stderr so --json keeps stdout clean.
 const log = (...a) => console.error(...a);
@@ -69,14 +77,75 @@ const die = (msg, hint) => {
   process.exit(1);
 };
 
+/** Is there a terminal we can prompt on? /dev/tty exists even when stdin is piped. */
+function hasTty() {
+  try {
+    const fd = fs.openSync("/dev/tty", "r");
+    fs.closeSync(fd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Numbered prompt. Returns the chosen index. Dies with the options listed when
+ * there is no terminal to ask on.
+ *
+ * Reads from /dev/tty rather than fd 0 so a piped stdin (or a harness that has
+ * already consumed it) does not swallow the answer.
+ */
+function choose(title, rows) {
+  let tty;
+  try {
+    tty = fs.openSync("/dev/tty", "r");
+  } catch {
+    die(
+      `${title} needs a choice, but there is no terminal to ask on`,
+      `Pass it explicitly. ${rows.length} option(s):\n` +
+        rows.map((r, i) => `  ${i + 1}. ${r}`).join("\n"),
+    );
+  }
+  console.error(`\n${title}`);
+  rows.forEach((r, i) => console.error(`  ${i + 1}. ${r}`));
+  const buf = Buffer.alloc(128);
+  try {
+    for (;;) {
+      process.stderr.write("> ");
+      let n;
+      try {
+        n = fs.readSync(tty, buf, 0, buf.length, null);
+      } catch (e) {
+        if (e.code === "EAGAIN") continue;
+        throw e;
+      }
+      if (n === 0) process.exit(130); // EOF: abort
+      const answer = buf.slice(0, n).toString().trim();
+      if (answer === "") process.exit(130);
+      const idx = Number(answer);
+      if (Number.isInteger(idx) && idx >= 1 && idx <= rows.length) return idx - 1;
+      console.error(`  pick a number between 1 and ${rows.length}`);
+    }
+  } finally {
+    fs.closeSync(tty);
+  }
+}
+
 // -------------------------------------------------------------- pipeline config
 
 const pipelineName = opt("pipeline");
-const pipeline = pipelineName
-  ? CONFIG.pipelines.find((p) => p.name === pipelineName)
-  : CONFIG.pipelines[0];
-if (!pipeline) {
-  die(`unknown pipeline: ${pipelineName}`, `Known: ${CONFIG.pipelines.map((p) => p.name).join(", ")}`);
+let pipeline;
+if (pipelineName) {
+  pipeline = CONFIG.pipelines.find((p) => p.name === pipelineName);
+  if (!pipeline) {
+    die(`unknown pipeline: ${pipelineName}`, `Known: ${CONFIG.pipelines.map((p) => p.name).join(", ")}`);
+  }
+} else {
+  const idx = choose(
+    "Select pipeline:",
+    CONFIG.pipelines.map((p) => `${p.name}${p.abhReleaseId ? "" : "   (not ABH-onboarded)"}`),
+  );
+  pipeline = CONFIG.pipelines[idx];
 }
 if (!pipeline.abhReleaseId) {
   die(
@@ -96,19 +165,35 @@ log(`service  : ${pipeline.serviceName} (${pipeline.serviceId})`);
 
 // ------------------------------------------------------------- 1. target build
 
+// Fetched once and reused: the build choice, and later the lookup that maps a
+// past request's build number back to its ADO build id.
+const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 200 });
+const runByNum = new Map(runs.map((r) => [r.num, r]));
+const shippable = runs.filter((r) => r.result === "succeeded" || r.result === "partiallySucceeded");
+
 let buildId = opt("build");
 let buildNumber;
 if (buildId) {
-  const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 50 });
   const hit = runs.find((r) => String(r.id) === String(buildId));
   buildNumber = hit?.num;
-  if (!hit) log(`warn     : build ${buildId} not in the last 50 runs; using it anyway`);
-} else {
-  const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 50 });
-  const ok = runs.find((r) => r.result === "succeeded" || r.result === "partiallySucceeded");
+  if (!hit) log(`warn     : build ${buildId} not in the last 200 runs; using it anyway`);
+} else if (flag("latest") || !hasTty()) {
+  const ok = shippable[0];
   if (!ok) die(`no succeeded build found for ${pipeline.name}`, `Pass --build <id> explicitly.`);
   buildId = ok.id;
   buildNumber = ok.num;
+} else {
+  if (shippable.length === 0) {
+    die(`no succeeded build found for ${pipeline.name}`, `Pass --build <id> explicitly.`);
+  }
+  const rows = shippable.slice(0, 10).map((r) => {
+    const when = (r.finished ?? "").slice(0, 10);
+    const partial = r.result === "partiallySucceeded" ? "  partiallySucceeded" : "";
+    return `${(r.num ?? "?").padEnd(16)} ${when}  id=${r.id}${partial}`;
+  });
+  const idx = choose(`Select build for ${pipeline.name}:`, rows);
+  buildId = shippable[idx].id;
+  buildNumber = shippable[idx].num;
 }
 log(`build    : ${buildNumber ?? "?"} (id ${buildId})`);
 
@@ -118,8 +203,6 @@ log(`build    : ${buildNumber ?? "?"} (id ${buildId})`);
 // under Azure Build Out Automation), and a request does not record which pipeline
 // it came from. So walk the approved requests newest-first and keep the first one
 // whose build number exists in THIS pipeline's runs.
-const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 200 });
-const runByNum = new Map(runs.map((r) => [r.num, r]));
 
 const history = await safefly.listRequests({
   serviceId: pipeline.serviceId,
@@ -341,13 +424,24 @@ const compatible = await safefly.findCompatibleLease({
   requestTitle: title,
 });
 if (!compatible) {
+  // findCompatibleLease only answers yes/no; ask about the specific lease to get
+  // the reason out of the server rather than guessing.
+  const why = await safefly.leaseCompatibility({
+    leaseRequestId: lease.id,
+    franchiseId: franchise.id,
+    changeTypeId,
+    serviceId: pipeline.serviceId,
+    formId: draft.formId,
+    requestTitle: title,
+  });
   die(
     `SafeFly found no lease covering draft ${draft.displayId}`,
     `Locally selected lease ${lease.displayId} "${lease.name}" (state=${lease.currentState})\n` +
-      `  active=${safefly.leaseIsActive(lease)} coversService=${safefly.leaseCoversService(lease, pipeline.serviceId)}\n` +
-      `  titleSatisfies=${safefly.titleSatisfiesLease(lease, title)}\n\n` +
-      `A lease is consumed once its request is approved, so a fresh one is needed per\n` +
-      `release. The draft was created and is safe to edit or abandon:\n` +
+      `  active=${safefly.leaseIsActive(lease)} coversService=${safefly.leaseCoversService(lease, pipeline.serviceId)}` +
+      ` titleSatisfies=${safefly.titleSatisfiesLease(lease, title)}\n` +
+      `SafeFly says: status=${why.status} isCompatible=${why.isCompatible}\n` +
+      (why.failureReasons?.length ? why.failureReasons.map((r) => `  - ${r}`).join("\n") + "\n" : "") +
+      `\nThe draft was created and is safe to edit or abandon:\n` +
       `  https://ms.portal.azure.com/#view/Microsoft_SafeflyV2/ChangeRequestView.ReactView/requestId/${draft.displayId}`,
   );
 }
@@ -383,8 +477,8 @@ if (doSubmit) {
   final = await safefly.submitRequest({ requestId: filled.id });
   log(`submitted: ${final.displayId} -> ${final.status}/${final.displayStatus}`);
 } else {
-  log(`\ndraft left unsubmitted. Review it, then submit with:`);
-  log(`  r2d --pipeline "${pipeline.name}" --build ${buildId} --submit`);
+  log(`\ndraft left unsubmitted (--draft). Submit it with:`);
+  log(`  r2d --pipeline "${pipeline.name}" --build ${buildId}`);
   log(`or in the portal.`);
 }
 

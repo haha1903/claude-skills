@@ -15,14 +15,36 @@ old `r2d.sh` browser automation cannot be adapted.
 ## TL;DR
 
 ```bash
+r2d                           # prompts for pipeline + build, then creates AND SUBMITS
 r2d --dry-run                 # resolve everything, print the plan, create nothing
-r2d                           # create the draft, fill it, attach the lease
-r2d --submit                  # ...and submit for approval
-r2d --pipeline "Lionrock-OfficialBuild+Release" --build 176777141 --submit
+r2d --draft                   # create and fill, but stop before submitting
+r2d --pipeline "Lionrock-OfficialBuild+Release" --build 176777580
+r2d --latest                  # skip the build prompt, take the newest succeeded build
 ```
 
-`--dry-run` first is worth it: it exercises every read and shows the exact title,
-service group, regions and answers before anything is created.
+**Submitting is the default.** A bare `r2d` puts a production deployment in front
+of approvers with no further confirmation, so `--dry-run` first is worth it: it
+exercises every read and prints the exact title, service group, regions and
+answers before anything exists.
+
+With no `--pipeline` / `--build` it prompts:
+
+```
+Select pipeline:
+  1. BET-OfficialBuild+Release
+  2. Lionrock-OfficialBuild+Release
+  3. Ev2Extensions-Incremental-Prod
+> 2
+
+Select build for Lionrock-OfficialBuild+Release:
+  1. 1.0.03513.467   2026-08-15  id=176777580
+  2. 1.0.03512.466   2026-08-14  id=176667793
+> 1
+```
+
+Prompts read `/dev/tty`, so a piped stdin does not swallow the answer. With no
+terminal at all (cron, CI) the build defaults to newest-succeeded and a missing
+`--pipeline` is a hard error listing the options.
 
 ## What it does
 
@@ -34,7 +56,7 @@ service group, regions and answers before anything is created.
 | 4. Change title + description | **ABH** `/release/.../summary` (Copilot, with real PR links) |
 | 5. Resolve the covering lease | SafeFly lease list + `findCompatibleLease` |
 | 6. Create draft, save answers, attach lease | SafeFly `saveRequest` |
-| 7. Submit | SafeFly `submitRequest`, only with `--submit` |
+| 7. Submit | SafeFly `submitRequest`, unless `--draft` |
 
 Step 2 uses the approval system as the source of truth rather than scanning ADO
 pipeline timelines, so the comparison build cannot drift from what reviewers
@@ -58,8 +80,12 @@ the config have `abhReleaseId: null` and the tool refuses them with instructions
 
 ## Leases are consumed
 
-A lease is spent once its change request is approved. `15.1295` covered request
-`15.3412` and is now `End`, so the next release needs a new one.
+Leases are reusable: `15.1295` has covered 4 requests
+(`changesUsingThisExceptionCount`) and is still valid.
+
+Do not read a lease's state off the `status` field of a single-lease query. That
+is the workflow node position, and `End` there only means the approval workflow
+finished. `displayStatus` (aliased to `currentState` in iris) is the real state.
 
 When no usable lease is found the tool stops and does not create anything:
 
@@ -111,6 +137,13 @@ evaluated before checking for gaps.
 **`findCompatibleLease` needs a `formId`**, which only exists once a draft has been
 created. So the lease is picked locally first (to learn the title prefix), then
 confirmed against SafeFly after the draft exists.
+
+**The lease title goes in `requestProperties`, not `requestTitle`.** Despite its
+name, the `requestTitle` argument is not fed into property-binding evaluation:
+SafeFly answers `QUESTION_BINDING_ERROR` / "Property 'Change Request Title' was
+not provided", and `findCompatibleLease` reports that as a plain "no lease found".
+`leaseCompatibility()` is the function to reach for when a lease is rejected and
+the reason matters.
 
 ## Config
 
