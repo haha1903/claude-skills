@@ -1,0 +1,386 @@
+#!/usr/bin/env node
+/**
+ * SafeFly V2 R2D automation (via iris safefly + abh).
+ *
+ *   r2d [--pipeline NAME] [--build ID] [--submit] [--json] [--dry-run]
+ *
+ * Pipeline:
+ *   1. pick the build to deploy (latest succeeded, or --build)
+ *   2. ask SafeFly which build shipped last -> ABH comparison build
+ *   3. ABH /context   -> ev2 service group + target regions
+ *   4. ABH /summary   -> Copilot change title + description
+ *   5. resolve the covering lease and its title prefix
+ *   6. create the draft, save answers, attach the lease
+ *   7. submit (only with --submit)
+ *
+ * Refuses to proceed when no usable lease covers the request: without one the
+ * request would silently fall back to full manual review.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { safefly, abh, ado } from "../../_iris-shared/index.mjs";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const CONFIG = JSON.parse(fs.readFileSync(path.join(HERE, "../config/services.json"), "utf8"));
+
+// ------------------------------------------------------------------ arg parsing
+
+const argv = process.argv.slice(2);
+function opt(long, def) {
+  const eq = argv.find((a) => a.startsWith(`--${long}=`));
+  if (eq) return eq.slice(long.length + 3);
+  const i = argv.indexOf(`--${long}`);
+  return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-") ? argv[i + 1] : def;
+}
+const flag = (name) => argv.includes(`--${name}`);
+
+if (flag("help") || flag("h")) {
+  console.log(`usage: r2d [options]
+
+  --pipeline NAME   pipeline from config/services.json (default: first entry)
+  --build ID        ADO build id to deploy (default: latest succeeded)
+  --submit          submit for approval; without this the draft is left for review
+  --dry-run         resolve everything, print the plan, create nothing
+  --json            machine-readable output
+  --list            list configured pipelines and exit
+
+Configured pipelines:
+${CONFIG.pipelines.map((p) => `  ${p.name}${p.abhReleaseId ? "" : "  (not ABH-onboarded)"}`).join("\n")}`);
+  process.exit(0);
+}
+
+if (flag("list")) {
+  for (const p of CONFIG.pipelines) {
+    console.log(`${p.name}\tdef=${p.definitionId}\tabh=${p.abhReleaseId ? "onboarded" : "NOT onboarded"}`);
+  }
+  process.exit(0);
+}
+
+const asJson = flag("json");
+const dryRun = flag("dry-run");
+const doSubmit = flag("submit");
+
+// Human-facing progress goes to stderr so --json keeps stdout clean.
+const log = (...a) => console.error(...a);
+const die = (msg, hint) => {
+  console.error(`\nERROR: ${msg}`);
+  if (hint) console.error(`\n${hint}`);
+  process.exit(1);
+};
+
+// -------------------------------------------------------------- pipeline config
+
+const pipelineName = opt("pipeline");
+const pipeline = pipelineName
+  ? CONFIG.pipelines.find((p) => p.name === pipelineName)
+  : CONFIG.pipelines[0];
+if (!pipeline) {
+  die(`unknown pipeline: ${pipelineName}`, `Known: ${CONFIG.pipelines.map((p) => p.name).join(", ")}`);
+}
+if (!pipeline.abhReleaseId) {
+  die(
+    `${pipeline.name} is not onboarded to Azure Build Health`,
+    `Save a release view first: Pipelines > Azure Build Health > Settings, then copy its\n` +
+      `releaseId into config/services.json (abhReleaseId). Without it SafeFly gets no\n` +
+      `Build Test Maturity signal for this pipeline.`,
+  );
+}
+
+const { franchise, changeTypes, ado: adoCfg } = CONFIG;
+const changeTypeId = changeTypes.appDeployment;
+const adoOpts = { org: `https://dev.azure.com/${adoCfg.org}`, project: adoCfg.project };
+
+log(`pipeline : ${pipeline.name} (def ${pipeline.definitionId})`);
+log(`service  : ${pipeline.serviceName} (${pipeline.serviceId})`);
+
+// ------------------------------------------------------------- 1. target build
+
+let buildId = opt("build");
+let buildNumber;
+if (buildId) {
+  const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 50 });
+  const hit = runs.find((r) => String(r.id) === String(buildId));
+  buildNumber = hit?.num;
+  if (!hit) log(`warn     : build ${buildId} not in the last 50 runs; using it anyway`);
+} else {
+  const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 50 });
+  const ok = runs.find((r) => r.result === "succeeded" || r.result === "partiallySucceeded");
+  if (!ok) die(`no succeeded build found for ${pipeline.name}`, `Pass --build <id> explicitly.`);
+  buildId = ok.id;
+  buildNumber = ok.num;
+}
+log(`build    : ${buildNumber ?? "?"} (id ${buildId})`);
+
+// ------------------------------------------- 2. previous shipped build from SafeFly
+
+const history = await safefly.listRequests({
+  serviceId: pipeline.serviceId,
+  changeTypeId,
+  pageSize: 30,
+});
+const prev = safefly.lastApprovedBuild(history.data);
+if (!prev) {
+  die(
+    `no previously approved SafeFly request found for ${pipeline.serviceName}`,
+    `The comparison build (payloadBuildId) comes from the last approved request.\n` +
+      `Nothing to compare against yet -- create the first request in the SafeFly V2 portal.`,
+  );
+}
+log(`previous : ${prev.buildVersion} (request ${prev.displayId})`);
+
+// Resolve that build number back to an ADO build id, which is what ABH wants.
+const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 200 });
+const prevRun = runs.find((r) => r.num === prev.buildVersion);
+if (!prevRun) {
+  die(
+    `build ${prev.buildVersion} (from request ${prev.displayId}) is not in the last 200 runs of ${pipeline.name}`,
+    `ABH needs its build id as the comparison build. Either it aged out or the last\n` +
+      `approved request belongs to a different pipeline.`,
+  );
+}
+const payloadBuildId = prevRun.id;
+log(`compare  : ${prev.buildVersion} (id ${payloadBuildId})`);
+
+// ------------------------------------------------------------------ 3. ABH data
+
+const buildRef = { org: adoCfg.org, projectId: adoCfg.projectId, buildId };
+
+const onboarding = await abh.onboardingStatus(buildRef);
+if (!abh.isOnboarded(onboarding)) {
+  die(
+    `build ${buildId} is not covered by an ABH onboarded pipeline`,
+    `ABH says: ${(onboarding.message || "").replace(/<[^>]+>/g, "").trim() || onboarding.errorLevel}`,
+  );
+}
+
+const ctx = await abh.releaseContext(buildRef);
+const ev2Unit = abh.ev2Unit(ctx);
+if (!ev2Unit?.name) {
+  die(
+    `ABH found no EV2 deployment unit for build ${buildId}`,
+    `This tool only handles EV2 rollouts (the App deployment change type expects them).`,
+  );
+}
+const serviceGroup = ev2Unit.name;
+const rawRegions = abh.ev2Regions(ctx);
+log(`ev2 sg   : ${serviceGroup}`);
+log(`regions  : ${rawRegions.join(", ") || "(none found)"}`);
+
+const summary = await abh.releaseSummary(buildRef, payloadBuildId);
+const abhTitle = (summary.customerFacingChangeTitle || "").trim();
+const abhDescription = (summary.customerFacingChangeDescription || "").trim();
+if (!abhTitle || !abhDescription) {
+  die(
+    `ABH returned no Copilot summary for build ${buildId} vs ${payloadBuildId}`,
+    `The AI analysis may still be running -- the ABH Summary tab shows "AI analysis in\n` +
+      `progress" for a few minutes after a build. Retry shortly.`,
+  );
+}
+log(`abh title: ${abhTitle.slice(0, 72)}${abhTitle.length > 72 ? "..." : ""}`);
+
+const buildHealthLink = abh.buildHealthLink({
+  org: adoCfg.org,
+  buildId,
+  definitionId: pipeline.definitionId,
+  serviceId: pipeline.serviceId,
+  releaseId: pipeline.abhReleaseId,
+  payloadBuildId,
+});
+
+// --------------------------------------------------------------------- 4. lease
+
+/**
+ * Pick the lease locally to learn its title binding. The lease constrains the
+ * change request title via a CHANGE_REQUEST_TITLE regex, and the title has to
+ * satisfy it before SafeFly will attach the lease -- so the prefix has to be
+ * known before the title is composed. SafeFly's own findCompatibleLease() is the
+ * authority, but it requires a formId, which only exists once a draft is created,
+ * so that confirmation happens after step 6.
+ */
+let lease;
+if (pipeline.leaseDisplayId) {
+  lease = await safefly.getLeaseRequestByDisplayId(pipeline.leaseDisplayId);
+  if (!lease) die(`configured lease ${pipeline.leaseDisplayId} not found`);
+} else {
+  const leases = await safefly.listLeaseRequests({ franchiseId: franchise.id, pageSize: 100 });
+  const usable = safefly.usableLeases(leases.data, pipeline.serviceId);
+  // The list shape lacks questionBindings; fetch the full lease for its regex.
+  if (usable.length > 0) lease = await safefly.getLeaseRequest(usable[0].id);
+}
+
+if (!lease) {
+  die(
+    `no approved, unexpired lease covers ${pipeline.serviceName}`,
+    `A lease is consumed once its request is approved, so a fresh one is needed per\n` +
+      `release. Create one and get it approved in the SafeFly V2 portal, then re-run.\n` +
+      `Submitting without a lease would drop this into full manual review.`,
+  );
+}
+
+const title = safefly.composeTitle(lease, abhTitle);
+if (!safefly.titleSatisfiesLease(lease, title)) {
+  die(
+    `cannot build a title that satisfies lease ${lease.displayId}`,
+    `Lease requires: ${safefly.leaseTitleRegexes(lease).join(", ") || "(no regex)"}\n` +
+      `ABH title    : ${abhTitle}\n` +
+      `Composed     : ${title}\n\n` +
+      `The lease's title binding is not a plain prefix, so set the title by hand in the\n` +
+      `portal or add a leaseDisplayId/title override to config/services.json.`,
+  );
+}
+log(`lease    : ${lease.displayId} "${lease.name}" (${lease.currentState})`);
+log(`title    : ${title.slice(0, 88)}${title.length > 88 ? "..." : ""}`);
+
+// ------------------------------------------------------------------- 5. answers
+
+// Build the answer map from static config plus everything discovered above.
+const wanted = {
+  ...pipeline.answers,
+  "ev2.servicegroup": serviceGroup,
+  "ev2.build": buildNumber ?? String(buildId),
+  "ado.build": buildHealthLink,
+};
+
+if (dryRun) {
+  const plan = {
+    pipeline: pipeline.name,
+    buildId,
+    buildNumber,
+    payloadBuildId,
+    previousRequest: prev.displayId,
+    serviceGroup,
+    regions: rawRegions,
+    title,
+    lease: { displayId: lease.displayId, id: lease.id, name: lease.name, state: lease.currentState },
+    answers: wanted,
+    descriptionChars: abhDescription.length,
+    wouldSubmit: doSubmit,
+  };
+  if (asJson) console.log(JSON.stringify(plan, null, 2));
+  else {
+    log(`\n--- dry run, nothing created ---`);
+    for (const [k, v] of Object.entries(wanted)) log(`  ${k.padEnd(26)} ${String(v).slice(0, 80)}`);
+  }
+  process.exit(0);
+}
+
+// ------------------------------------------------------- 6. create draft + fill
+
+const draft = await safefly.saveRequest({
+  franchiseId: franchise.id,
+  changeTypeId,
+  serviceId: pipeline.serviceId,
+  changeTitle: title,
+  changeDescription: abhDescription,
+  requestType: "CHANGE",
+});
+log(`draft    : ${draft.displayId} (${draft.id})`);
+
+// Question ids are per-form, so map names now that the draft carries the form.
+// DynamicChoice questions store a JSON array even when a single value is picked
+// (that is how the portal writes them); Text/Boolean questions store a scalar.
+const answers = [];
+const unknown = [];
+for (const [name, value] of Object.entries(wanted)) {
+  const q = (draft.questions ?? []).find((x) => x.name === name);
+  if (!q) { unknown.push(name); continue; }
+  const encoded = q.type === "DynamicChoice" ? JSON.stringify([String(value)]) : String(value);
+  answers.push({ questionId: q.id, value: encoded });
+}
+if (unknown.length) log(`warn     : no question on this form for ${unknown.join(", ")}`);
+
+// core.regions only accepts canonical names ("WestUS2", not "West US 2") and
+// rejects the whole save otherwise, so map EV2's lowercase output onto the
+// allowed list.
+const regionQ = (draft.questions ?? []).find((q) => q.name === "core.regions");
+if (regionQ && rawRegions.length) {
+  const allowed = await safefly.dynamicChoiceValues(regionQ);
+  const mapped = rawRegions.map((r) => safefly.matchRegion(allowed, r)).filter(Boolean);
+  const missed = rawRegions.filter((r) => !safefly.matchRegion(allowed, r));
+  if (missed.length) log(`warn     : regions not in SafeFly's list, skipped: ${missed.join(", ")}`);
+  if (mapped.length) answers.push({ questionId: regionQ.id, value: JSON.stringify(mapped) });
+}
+
+// Now that a draft (and therefore a formId) exists, let SafeFly confirm the
+// lease. It applies the same bindings it will enforce at submit time, so a hit
+// here means submitRequest() will not bounce on lease incompatibility.
+const compatible = await safefly.findCompatibleLease({
+  franchiseId: franchise.id,
+  changeTypeId,
+  serviceId: pipeline.serviceId,
+  formId: draft.formId,
+  requestTitle: title,
+});
+if (!compatible) {
+  die(
+    `SafeFly found no lease covering draft ${draft.displayId}`,
+    `Locally selected lease ${lease.displayId} "${lease.name}" (state=${lease.currentState})\n` +
+      `  active=${safefly.leaseIsActive(lease)} coversService=${safefly.leaseCoversService(lease, pipeline.serviceId)}\n` +
+      `  titleSatisfies=${safefly.titleSatisfiesLease(lease, title)}\n\n` +
+      `A lease is consumed once its request is approved, so a fresh one is needed per\n` +
+      `release. The draft was created and is safe to edit or abandon:\n` +
+      `  https://ms.portal.azure.com/#view/Microsoft_SafeflyV2/ChangeRequestView.ReactView/requestId/${draft.displayId}`,
+  );
+}
+if (compatible.id !== lease.id) {
+  log(`note     : SafeFly picked lease ${compatible.displayId}, not the locally chosen ${lease.displayId}`);
+}
+
+const filled = await safefly.saveRequest({
+  requestId: draft.id,
+  answers,
+  requestExceptions: [
+    { requestExceptionId: compatible.id, exceptionType: compatible.requestExceptionType },
+  ],
+});
+
+const byName = safefly.answersByName(filled);
+const missing = safefly.missingRequiredAnswers(filled, byName);
+log(`answers  : ${filled.answers?.length ?? 0} saved, lease ${filled.requestExceptions?.length ?? 0} attached`);
+if (missing.length) {
+  die(
+    `draft ${filled.displayId} is missing required answers: ${missing.join(", ")}`,
+    `The draft exists and is safe to edit in the portal:\n` +
+      `  https://ms.portal.azure.com/#view/Microsoft_SafeflyV2/ChangeRequestView.ReactView/requestId/${filled.displayId}`,
+  );
+}
+
+// --------------------------------------------------------------------- 7. submit
+
+const portalUrl = `https://ms.portal.azure.com/#view/Microsoft_SafeflyV2/ChangeRequestView.ReactView/requestId/${filled.displayId}`;
+let final = filled;
+
+if (doSubmit) {
+  final = await safefly.submitRequest({ requestId: filled.id });
+  log(`submitted: ${final.displayId} -> ${final.status}/${final.displayStatus}`);
+} else {
+  log(`\ndraft left unsubmitted. Review it, then submit with:`);
+  log(`  r2d --pipeline "${pipeline.name}" --build ${buildId} --submit`);
+  log(`or in the portal.`);
+}
+
+const out = {
+  displayId: final.displayId,
+  id: final.id,
+  status: final.status,
+  displayStatus: final.displayStatus,
+  risk: final.changeRisk,
+  autoApproved: final.riskAssessmentSummary?.explanation?.autoApproved ?? null,
+  activeStages: final.activeStageNames ?? [],
+  title,
+  buildId,
+  buildNumber,
+  payloadBuildId,
+  lease: compatible.displayId,
+  portalUrl,
+  submitted: doSubmit,
+};
+
+if (asJson) console.log(JSON.stringify(out, null, 2));
+else {
+  log("");
+  log(`request  : ${out.displayId}   status=${out.status}   risk=${out.risk}`);
+  if (out.activeStages.length) log(`stages   : ${out.activeStages.join(", ")}`);
+  log(`portal   : ${portalUrl}`);
+}

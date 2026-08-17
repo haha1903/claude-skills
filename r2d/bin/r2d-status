@@ -1,0 +1,82 @@
+#!/usr/bin/env node
+/**
+ * Show SafeFly V2 change request status (via iris safefly).
+ *
+ *   r2d-status <displayId>     one request, with answers / lease / risk
+ *   r2d-status --recent [N]    recent requests for the configured service
+ *   r2d-status --json ...      machine-readable
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { safefly } from "../../_iris-shared/index.mjs";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const CONFIG = JSON.parse(fs.readFileSync(path.join(HERE, "../config/services.json"), "utf8"));
+
+const argv = process.argv.slice(2);
+const asJson = argv.includes("--json");
+const wantRecent = argv.includes("--recent");
+const positional = argv.filter((a) => !a.startsWith("-"));
+
+const portal = (id) =>
+  `https://ms.portal.azure.com/#view/Microsoft_SafeflyV2/ChangeRequestView.ReactView/requestId/${id}`;
+
+if (!wantRecent && positional.length === 0) {
+  console.error("usage: r2d-status <displayId> | r2d-status --recent [N]");
+  process.exit(2);
+}
+
+if (wantRecent) {
+  const n = Number(positional[0] ?? 15);
+  const pipeline = CONFIG.pipelines[0];
+  const { data, totalCount } = await safefly.listRequests({
+    serviceId: pipeline.serviceId,
+    changeTypeId: CONFIG.changeTypes.appDeployment,
+    pageSize: n,
+  });
+  if (asJson) {
+    console.log(JSON.stringify(data, null, 2));
+  } else {
+    console.error(`${pipeline.serviceName} - ${data.length} of ${totalCount} requests\n`);
+    for (const r of data) {
+      const approved = (r.lastApprovalTimestamp ?? "").slice(0, 19).replace("T", " ");
+      console.log(
+        `${(r.displayId ?? "?").padEnd(10)} ${(r.currentState ?? "?").padEnd(11)}` +
+          ` build=${(r.buildVersion || "-").padEnd(15)} risk=${(r.changeRisk || "-").padEnd(9)} ${approved}`,
+      );
+    }
+  }
+  process.exit(0);
+}
+
+const req = await safefly.getRequestByDisplayId(positional[0]);
+if (!req) {
+  console.error(`request ${positional[0]} not found`);
+  process.exit(1);
+}
+
+const byName = safefly.answersByName(req);
+const missing = safefly.missingRequiredAnswers(req, byName);
+const snap = req.riskEvaluatorSnapshot ?? {};
+const ras = req.riskAssessmentSummary ?? {};
+
+if (asJson) {
+  console.log(JSON.stringify({ ...req, answersByName: byName, missingRequired: missing }, null, 2));
+  process.exit(0);
+}
+
+console.log(`${req.displayId}  ${req.status}/${req.displayStatus}`);
+console.log(`title    : ${req.changeTitle}`);
+console.log(`risk     : change=${req.changeRisk} overall=${req.overallRisk} team=${ras.teamAssessedRisk ?? "-"}`);
+console.log(`autoAppr : ${ras.explanation?.autoApproved ?? "-"}`);
+console.log(`stages   : ${(req.activeStageNames ?? []).join(", ") || "(none)"}`);
+console.log(`snapshot : taken=${snap.isSnapshotTaken ?? "-"} quorum=${(snap.quorumEvaluatorIds ?? []).length} extAutoApprove=${snap.enableExternalSignalAutoApprovalForService ?? "-"}`);
+console.log(`lease    : ${(req.requestExceptions ?? []).map((e) => e.requestExceptionId).join(", ") || "(none attached)"}`);
+console.log(`answers  : ${req.answers?.length ?? 0} of ${req.questions?.length ?? 0} questions`);
+if (missing.length) console.log(`MISSING  : ${missing.join(", ")}`);
+console.log(`portal   : ${portal(req.displayId)}`);
+console.log();
+for (const [k, v] of Object.entries(byName).sort()) {
+  console.log(`  ${k.padEnd(30)} ${String(v).slice(0, 76)}`);
+}
