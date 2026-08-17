@@ -50,7 +50,7 @@ terminal at all (cron, CI) the build defaults to newest-succeeded and a missing
 
 | Step | Source |
 |---|---|
-| 1. Pick the build to deploy | ADO, latest succeeded (or `--build`) |
+| 1. Pick the build to deploy | ADO, prompted (or `--build` / `--latest`) |
 | 2. Find what shipped last | **SafeFly**: newest approved request's `buildVersion` |
 | 3. EV2 service group + regions | **ABH** `/release/.../context` (parses the rollout spec) |
 | 4. Change title + description | **ABH** `/release/.../summary` (Copilot, with real PR links) |
@@ -60,7 +60,15 @@ terminal at all (cron, CI) the build defaults to newest-succeeded and a missing
 
 Step 2 uses the approval system as the source of truth rather than scanning ADO
 pipeline timelines, so the comparison build cannot drift from what reviewers
-actually let through.
+actually let through. BET, Lionrock and Ev2Extensions all share one serviceId and
+a request does not record its pipeline, so the approved requests are walked
+newest-first until one is found whose build number exists in this pipeline's runs.
+
+Step 3 falls back to `ev2ServiceGroupFallback` / `regionsFallback` from the config
+when ABH returns no deployment units. That happens for build-only pipelines like
+Lionrock, whose 419796 merely emits EV2 artifacts ("Binplace Ev2 files") while the
+rollout runs elsewhere, leaving ABH nothing to parse. Every fallback run warns
+twice, because those values are trusted without verification.
 
 ## Prerequisites
 
@@ -71,14 +79,27 @@ user token. No service principal, no IcM onboarding request.
 `releaseId` recorded in `config/services.json` as `abhReleaseId`. Without it ABH
 cannot scope the Build Test Maturity evaluation and SafeFly receives no test
 signal. To onboard: ADO → Pipelines → Azure Build Health → Settings → save the
-suggested release view, then copy `releaseId` out of the URL.
+suggested release view.
 
-Currently onboarded: `BET-OfficialBuild+Release` only. The other two pipelines in
-the config have `abhReleaseId: null` and the tool refuses them with instructions.
+**Do not read `releaseId` off the browser URL.** A service can hold several views
+over the same pipeline (419796 has two) and the URL carries whichever was opened
+last. List them instead:
 
-**A fresh approved lease** must cover the service. See below.
+```bash
+TOK=$(az account get-access-token --resource 1b3d0fbc-ab49-4526-a4b4-18eaa1844d6e \
+        --query accessToken -o tsv)
+curl -s -H "Authorization: Bearer $TOK" \
+  https://azurebuildhealthapi.azurefd.net/releaseIndex/<serviceTreeId> | jq .
+```
 
-## Leases are consumed
+All three configured pipelines are onboarded. `Ev2Extensions-Incremental-Prod`
+still stops early for a different reason: it has no approved V2 request yet, so
+there is no comparison build for ABH to diff against. Its first request has to be
+made in the portal.
+
+**An approved lease** must cover the service. See below.
+
+## Leases
 
 Leases are reusable: `15.1295` has covered 4 requests
 (`changesUsingThisExceptionCount`) and is still valid.
