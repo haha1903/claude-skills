@@ -72026,6 +72026,7 @@ __export(safefly_exports, {
   composeTitle: () => composeTitle,
   dynamicChoiceValues: () => dynamicChoiceValues,
   findCompatibleLease: () => findCompatibleLease,
+  findUsableLeases: () => findUsableLeases,
   getLeaseRequest: () => getLeaseRequest,
   getLeaseRequestByDisplayId: () => getLeaseRequestByDisplayId,
   getRequest: () => getRequest,
@@ -72252,7 +72253,8 @@ var LEASE_LIST_FIELDS = `
   applicableServices { choice serviceIds }
 `;
 var LEASE_ONE_FIELDS = `
-  id displayId name currentState: status serviceId
+  id displayId name currentState: displayStatus workflowStatus: status serviceId
+  changesUsingThisExceptionCount
   applicableServices { choice serviceIds }
   questionBindings { bindingType questionName comparisonOperator expectedValues
                      propertyBindingKey displayName }
@@ -72306,16 +72308,25 @@ async function findCompatibleLease(o, opts = {}) {
   return d.findCompatibleLease ?? null;
 }
 async function listLeaseRequests(o = {}, opts = {}) {
-  const filter = o.franchiseId ? { franchiseId: { equalTo: o.franchiseId } } : {};
+  const filter = {};
+  if (o.franchiseId) filter.franchiseId = { equalTo: o.franchiseId };
+  if (o.serviceId) filter.serviceIds = { equalTo: o.serviceId };
+  if (o.currentState) filter.currentState = { equalTo: o.currentState };
   const d = await gql(
-    `query($pageSize: Int, $continuationToken: String, $filter: LeaseRequestFilterOptionsBaseInput!) {
-       leaseRequests(pageSize: $pageSize, continuationToken: $continuationToken, filter: $filter) {
+    `query($pageSize: Int, $continuationToken: String, $filter: LeaseRequestFilterOptionsBaseInput!,
+           $sort: LeaseRequestSortOrderOptionsBaseInput) {
+       leaseRequests(pageSize: $pageSize, continuationToken: $continuationToken, filter: $filter, sort: $sort) {
          data { ${LEASE_LIST_FIELDS} }
          pageInfo { hasNextPage endCursor }
          totalCount
        }
      }`,
-    { pageSize: o.pageSize ?? 100, continuationToken: o.continuationToken, filter },
+    {
+      pageSize: o.pageSize ?? 100,
+      continuationToken: o.continuationToken,
+      filter,
+      sort: o.sort ?? { createdTimestamp: "DESC" }
+    },
     opts
   );
   const lr = d.leaseRequests;
@@ -72325,6 +72336,26 @@ async function listLeaseRequests(o = {}, opts = {}) {
     endCursor: lr.pageInfo?.endCursor,
     totalCount: lr.totalCount
   };
+}
+async function findUsableLeases(o, opts = {}) {
+  const out = [];
+  let cursor;
+  for (let page = 0; page < 5; page++) {
+    const r = await listLeaseRequests(
+      {
+        franchiseId: o.franchiseId,
+        serviceId: o.serviceId,
+        currentState: "Approved",
+        pageSize: 100,
+        continuationToken: cursor
+      },
+      opts
+    );
+    out.push(...usableLeases(r.data, o.serviceId, o.now));
+    if (!r.hasNextPage) break;
+    cursor = r.endCursor;
+  }
+  return out;
 }
 function leaseTitleRegexes(lease) {
   const out = [];

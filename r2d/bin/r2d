@@ -114,32 +114,37 @@ log(`build    : ${buildNumber ?? "?"} (id ${buildId})`);
 
 // ------------------------------------------- 2. previous shipped build from SafeFly
 
+// Several pipelines share one serviceId (BET, Lionrock and Ev2Extensions all sit
+// under Azure Build Out Automation), and a request does not record which pipeline
+// it came from. So walk the approved requests newest-first and keep the first one
+// whose build number exists in THIS pipeline's runs.
+const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 200 });
+const runByNum = new Map(runs.map((r) => [r.num, r]));
+
 const history = await safefly.listRequests({
   serviceId: pipeline.serviceId,
   changeTypeId,
-  pageSize: 30,
+  pageSize: 100,
 });
-const prev = safefly.lastApprovedBuild(history.data);
-if (!prev) {
-  die(
-    `no previously approved SafeFly request found for ${pipeline.serviceName}`,
-    `The comparison build (payloadBuildId) comes from the last approved request.\n` +
-      `Nothing to compare against yet -- create the first request in the SafeFly V2 portal.`,
-  );
-}
-log(`previous : ${prev.buildVersion} (request ${prev.displayId})`);
+const approved = history.data.filter(
+  (r) => (r.currentState ?? "").toLowerCase() === "approved" && r.buildVersion,
+);
+const prev = approved.find((r) => runByNum.has(r.buildVersion));
 
-// Resolve that build number back to an ADO build id, which is what ABH wants.
-const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 200 });
-const prevRun = runs.find((r) => r.num === prev.buildVersion);
-if (!prevRun) {
+if (!prev) {
+  const seen = approved.slice(0, 6).map((r) => `${r.displayId}=${r.buildVersion}`).join(", ");
   die(
-    `build ${prev.buildVersion} (from request ${prev.displayId}) is not in the last 200 runs of ${pipeline.name}`,
-    `ABH needs its build id as the comparison build. Either it aged out or the last\n` +
-      `approved request belongs to a different pipeline.`,
+    `no approved request found whose build belongs to ${pipeline.name}`,
+    `${approved.length} approved requests exist for ${pipeline.serviceName}, but none of\n` +
+      `their builds are in this pipeline's last 200 runs. Several pipelines share this\n` +
+      `service, so the history is mixed.\n` +
+      (seen ? `  recent: ${seen}\n` : "") +
+      `\nIf this pipeline has never shipped through SafeFly V2, create the first request\n` +
+      `in the portal; ABH needs a previous build to diff against.`,
   );
 }
-const payloadBuildId = prevRun.id;
+const payloadBuildId = runByNum.get(prev.buildVersion).id;
+log(`previous : ${prev.buildVersion} (request ${prev.displayId})`);
 log(`compare  : ${prev.buildVersion} (id ${payloadBuildId})`);
 
 // ------------------------------------------------------------------ 3. ABH data
@@ -154,18 +159,36 @@ if (!abh.isOnboarded(onboarding)) {
   );
 }
 
+// ABH parses the service group and regions out of the build's EV2 rollout task.
+// Pipelines that only produce EV2 artifacts (a "Binplace Ev2 files" task) and
+// leave the rollout to a separate pipeline have nothing to parse, so /context
+// comes back empty and the config fallback takes over.
 const ctx = await abh.releaseContext(buildRef);
 const ev2Unit = abh.ev2Unit(ctx);
-if (!ev2Unit?.name) {
-  die(
-    `ABH found no EV2 deployment unit for build ${buildId}`,
-    `This tool only handles EV2 rollouts (the App deployment change type expects them).`,
-  );
+let serviceGroup = ev2Unit?.name;
+let rawRegions = abh.ev2Regions(ctx);
+let fromFallback = false;
+
+if (!serviceGroup) {
+  serviceGroup = pipeline.ev2ServiceGroupFallback;
+  rawRegions = pipeline.regionsFallback ?? [];
+  fromFallback = true;
+  if (!serviceGroup) {
+    die(
+      `ABH found no EV2 deployment unit for build ${buildId}, and no fallback is configured`,
+      `${pipeline.name} looks like a build-only pipeline: its EV2 rollout runs elsewhere,\n` +
+        `so ABH has no "Ev2 RA - Deploy" task to parse. Add ev2ServiceGroupFallback and\n` +
+        `regionsFallback for it in config/services.json.`,
+    );
+  }
 }
-const serviceGroup = ev2Unit.name;
-const rawRegions = abh.ev2Regions(ctx);
-log(`ev2 sg   : ${serviceGroup}`);
-log(`regions  : ${rawRegions.join(", ") || "(none found)"}`);
+
+log(`ev2 sg   : ${serviceGroup}${fromFallback ? "  (config fallback, ABH /context was empty)" : ""}`);
+log(`regions  : ${rawRegions.join(", ") || "(none)"}${fromFallback ? "  (config fallback)" : ""}`);
+if (fromFallback) {
+  log(`warn     : service group and regions come from config, not from the build.`);
+  log(`warn     : verify they match what actually deploys before submitting.`);
+}
 
 const summary = await abh.releaseSummary(buildRef, payloadBuildId);
 const abhTitle = (summary.customerFacingChangeTitle || "").trim();
@@ -203,8 +226,13 @@ if (pipeline.leaseDisplayId) {
   lease = await safefly.getLeaseRequestByDisplayId(pipeline.leaseDisplayId);
   if (!lease) die(`configured lease ${pipeline.leaseDisplayId} not found`);
 } else {
-  const leases = await safefly.listLeaseRequests({ franchiseId: franchise.id, pageSize: 100 });
-  const usable = safefly.usableLeases(leases.data, pipeline.serviceId);
+  const usable = await safefly.findUsableLeases({
+    franchiseId: franchise.id,
+    serviceId: pipeline.serviceId,
+  });
+  if (usable.length > 1) {
+    log(`leases   : ${usable.length} usable, taking ${usable[0].displayId} (${usable.map((l) => l.displayId).join(", ")})`);
+  }
   // The list shape lacks questionBindings; fetch the full lease for its regex.
   if (usable.length > 0) lease = await safefly.getLeaseRequest(usable[0].id);
 }

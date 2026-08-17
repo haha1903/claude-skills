@@ -3,13 +3,20 @@
     "Per-pipeline R2D config for SafeFly V2. Everything here is stable identity;",
     "build numbers and descriptions are discovered at run time.",
     "",
-    "abhReleaseId comes from the ABH release view you save during onboarding:",
-    "open Pipelines > Azure Build Health, pick the release view, and copy the",
-    "releaseId query parameter out of the URL. Without it ABH cannot scope the",
-    "Build Test Maturity evaluation and SafeFly gets no test signal.",
+    "abhReleaseId is the ABH release view's id. Do not read it off the browser URL:",
+    "a service can hold several views over the same pipeline and the URL may carry",
+    "whichever one was last opened. List them instead:",
+    "  GET https://azurebuildhealthapi.azurefd.net/releaseIndex/<serviceTreeId>",
+    "(token: az account get-access-token --resource 1b3d0fbc-ab49-4526-a4b4-18eaa1844d6e)",
     "",
-    "leaseDisplayId is optional. When omitted, the tool asks SafeFly which lease",
-    "covers the request (findCompatibleLease) using the composed title."
+    "ev2ServiceGroupFallback / regionsFallback are used only when ABH /context",
+    "returns no deployment units. That happens when the build pipeline merely",
+    "produces EV2 artifacts ('Binplace Ev2 files') and a separate pipeline performs",
+    "the rollout, so there is no 'Ev2 RA - Deploy' task for ABH to parse. Values",
+    "here are trusted blindly, so they can drift from what actually deploys.",
+    "",
+    "leaseDisplayId is optional. When omitted, the tool finds approved leases",
+    "covering the service and confirms with SafeFly's findCompatibleLease."
   ],
   "franchise": {
     "name": "OFP-Franchise",
@@ -29,7 +36,7 @@
       "definitionId": 436638,
       "serviceName": "Azure Build Out Automation",
       "serviceId": "66fc1dd2-fca0-43fe-a29e-e5019a29e949",
-      "abhReleaseId": "bfe3f0fc-4e82-48bf-a6aa-e039ebd942ec",
+      "abhReleaseId": "d6d90211-7899-4d95-8571-284768dbfcc7",
       "answers": {
         "core.orchestrator_name": "EV2",
         "core.sdp": "Standard SDP",
@@ -44,8 +51,7 @@
       "definitionId": 419796,
       "serviceName": "Azure Build Out Automation",
       "serviceId": "66fc1dd2-fca0-43fe-a29e-e5019a29e949",
-      "abhReleaseId": null,
-      "$note": "abhReleaseId is null: this pipeline is not onboarded to ABH yet. Save a release view in Pipelines > Azure Build Health first.",
+      "abhReleaseId": "d7a81288-1376-4570-a87a-59d05b204221",
       "answers": {
         "core.orchestrator_name": "EV2",
         "core.sdp": "Standard SDP",
@@ -53,15 +59,19 @@
         "core.health_monitoring": "True",
         "ado.build_na": "False",
         "core.team_assessed_risk": "Low"
-      }
+      },
+      "ev2ServiceGroupFallback": "Microsoft.AzureGlobal.BuildoutAutomation.Lionrock.Prod.Incremental",
+      "regionsFallback": [
+        "WestUS2",
+        "WestCentralUS"
+      ]
     },
     {
       "name": "Ev2Extensions-Incremental-Prod",
       "definitionId": 425451,
       "serviceName": "Azure Build Out Automation",
       "serviceId": "66fc1dd2-fca0-43fe-a29e-e5019a29e949",
-      "abhReleaseId": null,
-      "$note": "abhReleaseId is null: this pipeline is not onboarded to ABH yet.",
+      "abhReleaseId": "0acd2d43-3f02-45e8-a299-daf8075972c7",
       "answers": {
         "core.orchestrator_name": "EV2",
         "core.sdp": "Standard SDP",
@@ -69,7 +79,12 @@
         "core.health_monitoring": "True",
         "ado.build_na": "False",
         "core.team_assessed_risk": "Low"
-      }
+      },
+      "ev2ServiceGroupFallback": "Microsoft.Lionrock.Ev2Extension.Incremental",
+      "regionsFallback": [
+        "EastUS",
+        "WestUS"
+      ]
     }
   ]
 }
