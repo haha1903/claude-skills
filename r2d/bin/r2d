@@ -188,9 +188,45 @@ log(`service  : ${pipeline.serviceName} (${pipeline.serviceId})`);
 
 // Fetched once and reused: the build choice, and later the lookup that maps a
 // past request's build number back to its ADO build id.
-const runs = ado.recentRuns(pipeline.definitionId, { ...adoOpts, top: 200 });
+//
+// recentRunsRest, not recentRuns: `az pipelines runs list` omits in-flight builds
+// entirely. These pipelines build AND release in one run, and R2D approval is the
+// gate before the release half, so the build that needs a request is by definition
+// still running. Filtering to completed runs hides exactly the right target.
+const runs = await ado.recentRunsRest(pipeline.definitionId, { ...adoOpts, top: 200 });
 const runByNum = new Map(runs.map((r) => [r.num, r]));
-const shippable = runs.filter((r) => r.result === "succeeded" || r.result === "partiallySucceeded");
+
+/**
+ * Is this run parked at its Approval phase, waiting for an R2D?
+ *
+ * That phase gates the release half of the run, so a build sitting there is the
+ * one that needs a request. Its build steps have finished, which is what makes
+ * the ABH signals meaningful.
+ */
+async function waitingForApproval(runId) {
+  try {
+    const timeline = await ado.timelineRest(runId, adoOpts);
+    return timeline.some(
+      (r) => r.type === "Phase" && /^Approval(Service)?$/.test(String(r.name ?? "")) && r.state === "pending",
+    );
+  } catch {
+    return false;
+  }
+}
+
+const active = runs.filter((r) => r.status === "inProgress" || r.status === "notStarted");
+const completed = runs.filter((r) => r.result === "succeeded" || r.result === "partiallySucceeded");
+
+// Check the in-flight runs first, newest first, and stop at the first one parked
+// at Approval.
+let awaiting = [];
+for (const r of active) {
+  if (await waitingForApproval(r.id)) awaiting.push(r);
+}
+
+// Runs awaiting approval come first: they are what an R2D is for. Completed runs
+// stay available for re-releases and for backfilling a request after the fact.
+const candidates = [...awaiting, ...completed.filter((c) => !awaiting.some((a) => a.id === c.id))];
 
 let buildId = opt("build");
 let buildNumber;
@@ -199,22 +235,29 @@ if (buildId) {
   buildNumber = hit?.num;
   if (!hit) log(`warn     : build ${buildId} not in the last 200 runs; using it anyway`);
 } else if (flag("latest") || !hasTty()) {
-  const ok = shippable[0];
-  if (!ok) die(`no succeeded build found for ${pipeline.name}`, `Pass --build <id> explicitly.`);
+  const ok = candidates[0];
+  if (!ok) {
+    die(
+      `no build found for ${pipeline.name} that is awaiting approval or already succeeded`,
+      `Pass --build <id> explicitly.`,
+    );
+  }
   buildId = ok.id;
   buildNumber = ok.num;
+  if (awaiting.some((a) => a.id === ok.id)) log(`note     : ${ok.num} is parked at its Approval phase`);
 } else {
-  if (shippable.length === 0) {
-    die(`no succeeded build found for ${pipeline.name}`, `Pass --build <id> explicitly.`);
+  if (candidates.length === 0) {
+    die(`no usable build found for ${pipeline.name}`, `Pass --build <id> explicitly.`);
   }
-  const rows = shippable.slice(0, 10).map((r) => {
-    const when = (r.finished ?? "").slice(0, 10);
+  const rows = candidates.slice(0, 10).map((r) => {
+    const waiting = awaiting.some((a) => a.id === r.id);
+    const when = waiting ? "awaiting approval" : (r.finished ?? "").slice(0, 10);
     const partial = r.result === "partiallySucceeded" ? "  partiallySucceeded" : "";
-    return `${(r.num ?? "?").padEnd(16)} ${when}  id=${r.id}${partial}`;
+    return `${(r.num ?? "?").padEnd(16)} ${when.padEnd(18)} id=${r.id}${partial}`;
   });
   const idx = choose(`Select build for ${pipeline.name}:`, rows);
-  buildId = shippable[idx].id;
-  buildNumber = shippable[idx].num;
+  buildId = candidates[idx].id;
+  buildNumber = candidates[idx].num;
 }
 log(`build    : ${buildNumber ?? "?"} (id ${buildId})`);
 

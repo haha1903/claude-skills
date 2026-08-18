@@ -44,7 +44,11 @@
         "core.health_monitoring": "true",
         "ado.build_na": "false",
         "core.team_assessed_risk": "Low"
-      }
+      },
+      "ev2ServiceGroupFallback": "Microsoft.AzureGlobal.BuildoutAutomation.BET.Prod.Incremental",
+      "regionsFallback": [
+        "WestUS2"
+      ]
     },
     {
       "name": "Lionrock-OfficialBuild+Release",
@@ -60,7 +64,7 @@
         "ado.build_na": "false",
         "core.team_assessed_risk": "Low"
       },
-      "ev2ServiceGroupFallback": "Microsoft.AzureGlobal.BuildoutAutomation.Lionrock.Prod.Incremental",
+      "ev2ServiceGroupFallback": "microsoft.azureglobal.buildoutautomation.prod.incremental",
       "regionsFallback": [
         "WestUS2",
         "WestCentralUS"
