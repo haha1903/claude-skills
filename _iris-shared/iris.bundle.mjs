@@ -44182,10 +44182,16 @@ var init_oauth_provider = __esm({
        * Silent first; on miss, refill per IRIS_TOKEN_REFILL (interactive | bridge).
        */
       async getToken(req) {
-        const scopes = [`${req.resourceUrl}/.default`];
+        const scopes = req.scopes ?? [`${req.resourceUrl}/.default`];
         const silent = await this.trySilent(scopes);
         if (silent) return silent;
-        if ((process.env.IRIS_TOKEN_REFILL ?? "interactive") === "bridge") {
+        const refill = process.env.IRIS_TOKEN_REFILL ?? "interactive";
+        if (refill === "none") {
+          throw new Error(
+            `no usable token for ${req.resourceUrl} and IRIS_TOKEN_REFILL=none, so there is nothing to fall back to. Either the cache holds no account for this client, or its refresh token has expired (90 days of inactivity). Re-import it from a machine that can log in: \`node bin/import-mcp-token.mjs <server>\`, then copy ${this.cachePath} into place.`
+          );
+        }
+        if (refill === "bridge") {
           const { cacheViaKv: cacheViaKv2 } = await Promise.resolve().then(() => (init_bridge(), bridge_exports));
           await cacheViaKv2({ tenant: this.tenantId, client: this.clientId });
           const retry = await this.trySilent(scopes);
@@ -44213,8 +44219,8 @@ var init_oauth_provider = __esm({
        * false instead of falling back to interactive (the relay has no browser); the
        * caller logs guidance to re-login via the refresh-token skill.
        */
-      async rollSilent(resourceUrl) {
-        return await this.trySilent([`${resourceUrl}/.default`]) !== null;
+      async rollSilent(resourceUrl, scopes) {
+        return await this.trySilent(scopes ?? [`${resourceUrl}/.default`]) !== null;
       }
       /** Clear cached tokens — next call will require interactive login. */
       async logout() {
@@ -69892,6 +69898,9 @@ init_bridge();
 // src/kusto.ts
 var kusto_exports = {};
 __export(kusto_exports, {
+  KustoRejectedError: () => KustoRejectedError,
+  classifyResponseForTest: () => classifyResponseForTest,
+  isRetryableForTest: () => isRetryableForTest,
   listTables: () => listTables,
   mgmtKusto: () => mgmtKusto,
   parseSchema: () => parseSchema,
@@ -69937,6 +69946,15 @@ var KustoAuthError = class extends Error {
   }
   status;
 };
+var KustoRejectedError = class extends Error {
+  constructor(status, body) {
+    super(`Kusto ${status}: ${body.replace(/\s+/g, " ").slice(0, 200)}`);
+    this.status = status;
+    this.body = body;
+  }
+  status;
+  body;
+};
 async function httpPost(url2, token, body, timeout) {
   const r = await fetchWithTimeout(url2, {
     method: "POST",
@@ -69947,19 +69965,38 @@ async function httpPost(url2, token, body, timeout) {
   const text = await r.text();
   if (r.status === 401 || r.status === 403) throw new KustoAuthError(r.status, `Kusto auth ${r.status}: ${text.slice(0, 200)}`);
   if (!text.trim()) throw new Error(`Empty response (status ${r.status})`);
+  if (!r.ok) throw new KustoRejectedError(r.status, text);
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error(`Non-JSON response: ${text.slice(0, 500)}`);
+    throw new Error(`Non-JSON response (status ${r.status}): ${text.slice(0, 500)}`);
+  }
+}
+function isRetryable(e) {
+  if (e instanceof KustoAuthError) return true;
+  if (!(e instanceof KustoRejectedError)) return false;
+  if (e.status === 429 || e.status >= 500) return true;
+  return e.status === 400 && /General_BadRequest/i.test(e.body);
+}
+var isRetryableForTest = isRetryable;
+function classifyResponseForTest(status, text) {
+  if (status === 401 || status === 403) return { kind: "auth", status };
+  if (!text.trim()) return { kind: "empty", status };
+  if (status < 200 || status >= 300) return { kind: "rejected", status };
+  try {
+    JSON.parse(text);
+    return { kind: "ok", status };
+  } catch {
+    return { kind: "unparseable", status };
   }
 }
 async function postWithRetry(url2, token, body, timeout) {
-  const backoffsMs = [2e3, 4e3];
+  const backoffsMs = [2e3, 4e3, 8e3];
   for (let attempt = 0; ; attempt++) {
     try {
       return await httpPost(url2, token, body, timeout);
     } catch (e) {
-      if (e instanceof KustoAuthError && attempt < backoffsMs.length) {
+      if (isRetryable(e) && attempt < backoffsMs.length) {
         await new Promise((r) => setTimeout(r, backoffsMs[attempt]));
         continue;
       }
@@ -69998,6 +70035,7 @@ __export(icm_exports, {
   ONCALL_ENDPOINT: () => ONCALL_ENDPOINT,
   PENDING_FOLDER: () => PENDING_FOLDER,
   PORTAL_URL: () => PORTAL_URL,
+  QUERY_TIME_ZONE: () => QUERY_TIME_ZONE,
   SAVED_QUERY_SELECT: () => SAVED_QUERY_SELECT,
   WAREHOUSE_DB: () => WAREHOUSE_DB,
   ack: () => ack,
@@ -70060,7 +70098,8 @@ __export(icm_exports, {
   teamLeaf: () => teamLeaf,
   teamsById: () => teamsById,
   transfer: () => transfer,
-  update: () => update
+  update: () => update,
+  writeFieldsCacheForTest: () => writeFieldsCacheForTest
 });
 import os7 from "node:os";
 import fs12 from "node:fs";
@@ -70080,8 +70119,19 @@ function portalUrl(id) {
 function resolveOwner(raw) {
   if (!raw || String(raw).toLowerCase() === "all") return { alias: null, filter: "" };
   const lower = String(raw).toLowerCase();
-  const alias = lower === "me" ? os7.userInfo().username : lower === "unassigned" ? "" : raw;
+  const alias = lower === "me" ? currentAlias() : lower === "unassigned" ? "" : raw;
   return { alias, filter: `| where OwningContactAlias == "${alias}"` };
+}
+function currentAlias() {
+  const configured = (process.env.ICM_ALIAS ?? "").trim();
+  if (configured) return configured;
+  try {
+    return os7.userInfo().username;
+  } catch {
+    throw new Error(
+      'owner "me" needs a logged-in user, and this process has none (no passwd entry for its uid). Set ICM_ALIAS=<alias>, or pass the alias instead of "me".'
+    );
+  }
 }
 function pendingKql(ownerFilter, owningTenantId) {
   return `
@@ -70248,10 +70298,14 @@ function readFieldsCache() {
   }
 }
 function writeFieldsCache(map) {
-  const p = fieldsCachePath();
-  fs12.mkdirSync(path7.dirname(p), { recursive: true });
-  fs12.writeFileSync(p, JSON.stringify(map, null, 2) + "\n");
+  try {
+    const p = fieldsCachePath();
+    fs12.mkdirSync(path7.dirname(p), { recursive: true });
+    fs12.writeFileSync(p, JSON.stringify(map, null, 2) + "\n");
+  } catch {
+  }
 }
+var writeFieldsCacheForTest = writeFieldsCache;
 function parseFieldMeta(entry) {
   const prop = entry.Property;
   const nameField = prop?.NameField;
@@ -70311,13 +70365,23 @@ var OPERATOR_MAP = {
 function odataString(v) {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
-function expandDateToken(token, now = /* @__PURE__ */ new Date()) {
+var QUERY_TIME_ZONE = "America/Los_Angeles";
+function expandDateToken(token, now = /* @__PURE__ */ new Date(), timeZone = QUERY_TIME_ZONE) {
   const t = token.trim();
   const m = t.match(/^@Today\s*(?:-\s*(\d+))?$/i);
   if (!m) return t;
   const days = m[1] ? Number(m[1]) : 0;
-  const base = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) - days * 864e5);
-  return base.toISOString().replace(/\.\d{3}Z$/, "Z");
+  const offsetMin = tzOffsetMinutes(now, timeZone);
+  const local = new Date(now.getTime() + offsetMin * 6e4);
+  const localDayEnd = Date.UTC(
+    local.getUTCFullYear(),
+    local.getUTCMonth(),
+    local.getUTCDate(),
+    23,
+    59,
+    59
+  ) - days * 864e5;
+  return new Date(localDayEnd - offsetMin * 6e4).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 function formatValue(meta2, value) {
   const dt = (meta2?.dataType ?? "").toLowerCase();
@@ -72538,6 +72602,285 @@ function buildHealthLink(o) {
   });
   return `https://${org}.visualstudio.com/One/_apps/buildhealth?${q.toString()}`;
 }
+
+// src/webjobs.ts
+var webjobs_exports = {};
+__export(webjobs_exports, {
+  continuousJobs: () => continuousJobs,
+  extractFailure: () => extractFailure,
+  health: () => health,
+  runHistory: () => runHistory,
+  runLog: () => runLog,
+  triggeredJobs: () => triggeredJobs
+});
+init_auth();
+init_http();
+var ARM = "https://management.azure.com";
+var API_VERSION = "2023-12-01";
+var NEVER2 = "0001-01-01";
+function shortName(full) {
+  return String(full || "").split("/").pop() ?? "";
+}
+var TRANSIENT = /* @__PURE__ */ new Set([429, 500, 502, 503, 504]);
+var BACKOFFS_MS = [2e3, 5e3];
+var ATTEMPT_TIMEOUT_S = 60;
+var KUDU_ATTEMPT_TIMEOUT_S = 150;
+async function getWithRetry(url2, timeout, what, attemptCap = ATTEMPT_TIMEOUT_S) {
+  const deadline = Date.now() + timeout * 1e3;
+  const token = await wicToken(ARM, { timeout: Math.min(timeout, ATTEMPT_TIMEOUT_S) });
+  for (let attempt = 0; ; attempt++) {
+    const left = (deadline - Date.now()) / 1e3;
+    let status;
+    try {
+      const r = await fetchWithTimeout(url2, {
+        headers: { Authorization: `Bearer ${token}` },
+        timeoutSeconds: Math.max(1, Math.min(attemptCap, left))
+      });
+      if (r.ok) return r;
+      status = r.status;
+    } catch (e) {
+      if (!(e instanceof Error) || e.name !== "AbortError") throw e;
+    }
+    const retryable = status === void 0 || TRANSIENT.has(status);
+    const backoff = BACKOFFS_MS[attempt];
+    if (!retryable || backoff === void 0 || Date.now() + backoff >= deadline) {
+      throw new Error(`${what} ${status ?? "timeout"} for ${url2.replace(/\?.*/, "")}`);
+    }
+    await new Promise((r) => setTimeout(r, backoff));
+  }
+}
+async function armJson(url2, timeout) {
+  const r = await getWithRetry(url2, timeout, "ARM");
+  return await r.json();
+}
+function siteBase(s) {
+  return `${ARM}/subscriptions/${s.subscription}/resourceGroups/${s.resourceGroup}/providers/Microsoft.Web/sites/${s.site}`;
+}
+async function listJobs(s, kind, timeout) {
+  const deadline = Date.now() + timeout * 1e3;
+  try {
+    const r = await getWithRetry(
+      `https://${s.site}.scm.azurewebsites.net/api/${kind}`,
+      timeout,
+      "Kudu",
+      KUDU_ATTEMPT_TIMEOUT_S
+    );
+    const arr = await r.json();
+    return (arr ?? []).map((p) => ({ name: p.name, properties: p }));
+  } catch (kuduError) {
+    const left = (deadline - Date.now()) / 1e3;
+    if (left < 10) throw kuduError;
+    try {
+      const j = await armJson(`${siteBase(s)}/${kind}?api-version=${API_VERSION}`, left);
+      return j.value ?? [];
+    } catch (armError) {
+      const msg = (e) => e instanceof Error ? e.message : String(e);
+      throw new Error(`${msg(kuduError)} (ARM fallback also failed: ${msg(armError)})`);
+    }
+  }
+}
+async function triggeredJobs(s, timeout = 180) {
+  const out = [];
+  for (const item of await listJobs(s, "triggeredwebjobs", timeout)) {
+    const p = item.properties ?? {};
+    const run2 = p.latest_run ?? {};
+    const endTime = run2.end_time ?? run2.endTime;
+    const status = run2.status;
+    out.push({
+      name: shortName(item.name),
+      ...p.settings?.schedule ? { schedule: p.settings.schedule } : {},
+      ...status ? { status } : {},
+      ...run2.start_time ?? run2.startTime ? { startTime: run2.start_time ?? run2.startTime } : {},
+      ...endTime ? { endTime } : {},
+      ...run2.duration ? { duration: run2.duration } : {},
+      ...run2.output_url ?? run2.outputUrl ? { outputUrl: run2.output_url ?? run2.outputUrl } : {},
+      running: status === "Running" && String(endTime ?? "").startsWith(NEVER2)
+    });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+async function continuousJobs(s, timeout = 180) {
+  const out = [];
+  for (const item of await listJobs(s, "continuouswebjobs", timeout)) {
+    const p = item.properties ?? {};
+    out.push({
+      name: shortName(item.name),
+      ...p.status ? { status: p.status } : {},
+      ...p.detailed_status ?? p.detailedStatus ? { detailedStatus: p.detailed_status ?? p.detailedStatus } : {},
+      error: p.error ?? null
+    });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+async function runHistory(s, job, timeout = 60) {
+  const url2 = `https://${s.site}.scm.azurewebsites.net/api/triggeredwebjobs/${job}/history`;
+  const r = await getWithRetry(url2, timeout, `Kudu history for ${job}:`);
+  const j = await r.json();
+  return (j.runs ?? []).map((run2) => ({
+    ...run2.status ? { status: run2.status } : {},
+    ...run2.start_time ? { startTime: run2.start_time } : {},
+    ...run2.end_time ? { endTime: run2.end_time } : {},
+    ...run2.duration ? { duration: run2.duration } : {},
+    ...run2.output_url ? { outputUrl: run2.output_url } : {}
+  }));
+}
+async function runLog(url2, timeout = 60) {
+  const r = await getWithRetry(url2, timeout, "Kudu run log:");
+  return await r.text();
+}
+function extractFailure(log, maxLines = 12) {
+  const keep = [];
+  for (const line of String(log ?? "").split(/\r?\n/)) {
+    const isError = /\bERR \]/.test(line);
+    const isFrame = /\bat (Lionrock|Microsoft\.Azure\.WebJobs)\./.test(line);
+    if (!isError && !isFrame) continue;
+    if (/Azure\.Identity\[|MSAL\.NetCore [\d.]+ MSAL/.test(line)) continue;
+    keep.push(line.replace(/^\[[^\]]+\]\s*/, "").trim());
+    if (keep.length >= maxLines) break;
+  }
+  return keep;
+}
+function intervalSeconds(schedule) {
+  if (!schedule) return void 0;
+  const f = schedule.trim().split(/\s+/);
+  if (f.length !== 6) return void 0;
+  const [sec, min, hour] = f;
+  if (min?.startsWith("*/")) return Number(min.slice(2)) * 60 || void 0;
+  if (hour?.startsWith("*/")) return Number(hour.slice(2)) * 3600 || void 0;
+  if (hour && /^\d+(,\d+)*$/.test(hour)) return 86400 / hour.split(",").length;
+  if (hour === "*") return 3600;
+  if (min === "*" && sec === "0") return 60;
+  return void 0;
+}
+var CHRONIC_ABORT_RATIO = 0.5;
+async function health(s, now = /* @__PURE__ */ new Date(), timeout = 180) {
+  const [c, t] = await Promise.allSettled([
+    continuousJobs(s, timeout),
+    triggeredJobs(s, timeout)
+  ]);
+  const errors = {};
+  const continuous = c.status === "fulfilled" ? c.value : [];
+  const triggered = t.status === "fulfilled" ? t.value : [];
+  if (c.status === "rejected") errors.continuous = String(c.reason?.message ?? c.reason);
+  if (t.status === "rejected") errors.triggered = String(t.reason?.message ?? t.reason);
+  const failed = triggered.filter((j) => j.status === "Failed");
+  const late = [];
+  const running = [];
+  for (const j of triggered.filter((x) => x.running)) {
+    const gap = intervalSeconds(j.schedule);
+    const started = j.startTime ? Date.parse(j.startTime) : NaN;
+    const elapsed = Number.isNaN(started) ? void 0 : (now.getTime() - started) / 1e3;
+    if (gap && elapsed !== void 0 && elapsed > gap) late.push(j);
+    else running.push(j);
+  }
+  const overrunning = [];
+  const slowThisRun = [];
+  for (const j of late) {
+    let chronic = false;
+    try {
+      const runs = await runHistory(s, j.name, timeout);
+      const finished = runs.filter((r) => r.status !== "Running");
+      const aborted2 = finished.filter((r) => r.status === "Aborted").length;
+      chronic = finished.length === 0 || aborted2 / finished.length > CHRONIC_ABORT_RATIO;
+    } catch {
+      chronic = true;
+    }
+    (chronic ? overrunning : slowThisRun).push(j);
+  }
+  return {
+    site: s.site,
+    ...Object.keys(errors).length ? { errors } : {},
+    continuous: { total: continuous.length, notRunning: continuous.filter((j) => j.status !== "Running") },
+    triggered: { total: triggered.length, failed, overrunning, slowThisRun, running }
+  };
+}
+
+// src/mcp-http.ts
+var mcp_http_exports = {};
+__export(mcp_http_exports, {
+  LIONROCK_PROD: () => LIONROCK_PROD,
+  McpHttpClient: () => McpHttpClient,
+  parseRpcBody: () => parseRpcBody
+});
+init_oauth_provider();
+var LIONROCK_PROD = {
+  url: "https://lionrock-prod.microsoftlionrock.com/mcp",
+  tenantId: "72f988bf-86f1-41af-91ab-2d7cd011db47",
+  clientId: "b1866aa0-b0a0-4007-8b8d-fbfeaf468170",
+  scope: "https://lionrock-prod.microsoftlionrock.com/mcp/user_impersonation"
+};
+var PROTOCOL_VERSION = "2025-06-18";
+function parseRpcBody(raw, method = "rpc") {
+  const line = raw.split("\n").find((l) => l.startsWith("data: "));
+  const parsed = JSON.parse(line ? line.slice(6) : raw);
+  if (parsed.error) throw new Error(`MCP ${method} failed: ${parsed.error.message ?? JSON.stringify(parsed.error)}`);
+  return parsed.result ?? {};
+}
+var McpHttpClient = class {
+  server;
+  auth;
+  token;
+  initialised = false;
+  constructor(server) {
+    this.server = server;
+    this.auth = new McpAuthProvider({ tenantId: server.tenantId, clientId: server.clientId });
+  }
+  /** Path of the MSAL cache this client reads, for diagnostics. */
+  get cachePath() {
+    return this.auth.cachePath;
+  }
+  async bearer() {
+    if (!this.token) {
+      this.token = await this.auth.getToken({ resourceUrl: this.server.url, scopes: [this.server.scope] });
+    }
+    return this.token;
+  }
+  /**
+   * One JSON-RPC call. The server replies with an SSE frame rather than plain JSON, so the
+   * `data:` line is what carries the payload -- parsing the body as JSON directly fails.
+   */
+  async rpc(method, params, id) {
+    const res = await fetch(this.server.url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${await this.bearer()}`,
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream"
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id, method, params })
+    });
+    const raw = await res.text();
+    if (!res.ok) throw new Error(`MCP ${res.status} on ${method}: ${raw.slice(0, 300)}`);
+    return parseRpcBody(raw, method);
+  }
+  /** The handshake. Called automatically; a server rejects tool calls without it. */
+  async initialize() {
+    if (this.initialised) return {};
+    const r = await this.rpc("initialize", {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: "iris", version: "1" }
+    }, 1);
+    this.initialised = true;
+    return r.serverInfo ?? {};
+  }
+  /** What the server can do. Worth reading before guessing a tool name. */
+  async listTools() {
+    await this.initialize();
+    const r = await this.rpc("tools/list", {}, 2);
+    return r.tools ?? [];
+  }
+  /**
+   * Call one tool. Returns the content blocks verbatim rather than a parsed shape: each
+   * tool answers differently, and inventing a common shape here would hide fields the
+   * caller needs.
+   */
+  async callTool(name4, args = {}) {
+    await this.initialize();
+    const r = await this.rpc("tools/call", { name: name4, arguments: args }, 3);
+    return r.content ?? r;
+  }
+};
 export {
   Agent365Client,
   CalendarClient,
@@ -72575,10 +72918,12 @@ export {
   icm_exports as icm,
   kusto_exports as kusto,
   log_exports as log,
+  mcp_http_exports as mcpHttp,
   parseTeamsLink,
   safefly_exports as safefly,
   unwrapList,
-  unwrapOne
+  unwrapOne,
+  webjobs_exports as webjobs
 };
 /*! Bundled license information:
 
