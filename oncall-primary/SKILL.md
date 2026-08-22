@@ -58,10 +58,20 @@ node "~/.claude/skills/oncall-brief/bin/collect.mjs" --scope=primary "$(TZ=Austr
 `~/.claude/skills/oncall-brief/reference.md` for the ids, the exact status
 literals and the TODOs.
 
-**All nine items collect, in both environments.** Items a/b/c used to be blank in the
-container because they shelled out to `o-teams-digest` / `o-find-mail`, which are not
-installed here; they now go through iris's Agent365 facade with a delegated token from
-the cache on the PVC. Verified: three channels and the mailbox, zero errors.
+**All nine items collect, in both environments**, through iris's Agent365 facade with a
+delegated token from the cache on the PVC. Verified: three channels and the mailbox, zero
+errors.
+
+Two things a/b/c were quietly getting wrong until 2026-08-22, both worth knowing because
+neither produced an error -- they produced a plausible number:
+
+- **`replyCount` does not exist** on a channel message, so "has anyone answered?" was always
+  undefined and the report could only count posts.
+- **Item c counted the personal inbox.** The mail tool reads `/me/messages` and cannot be
+  aimed at a shared mailbox, so it was reporting Azure DevOps notifications as support mail.
+
+Both are fixed, and the shapes below reflect the fix. The lesson generalises: a source that
+returns a number is not necessarily returning YOUR number.
 
 **Item c returns counts only, and that is deliberate.** The mailbox may be read to work
 out what is happening; its contents must not be repeated. A support mailbox holds other
@@ -72,7 +82,8 @@ unanswered, redirect to the Support channel" is the shape. Anyone needing the wo
 Outlook.
 
 `mail.atLeast` means the page limit was hit, so `threads7d` is a floor rather than a
-count. Say "at least N".
+count. Say "at least N". And check `mail.mailbox` names bowloper@ -- if it names something
+else, the figure is not item c at all.
 
 Shape:
 
@@ -106,8 +117,21 @@ Shape:
   clear, so say so rather than omitting it.
   `flagged` = Sev<=2 / customer-impacting / mine / unassigned, worst first, each with a
   `reason`. Covers duties 1 and d.
-- `channels.{askForSupport,featureRequests,agcSupport}` - recent posts. Items a/b.
-- `mail` - recent bowloper@ threads. Item c.
+- `channels.{askForSupport,featureRequests,agcSupport}` - recent posts, each with
+  **`answered`** and `replies`. Items a/b. **Report the unanswered ones**, not the post count:
+  "8 posts" was never the question. `answered: undefined` means the reply lookup failed for
+  that post, so say "could not check", never "unanswered".
+  This used to be unanswerable: the collector read `replyCount`, which does not exist on these
+  messages, so it was always undefined and every report could only say how many posts existed.
+  Measured after the fix: 24 posts across the three channels, **4 unanswered** -- and
+  `askForSupport` had a 100% reply rate, while the open ones in Feature Requests and AGC go
+  back to 2026-07 and 2026-05.
+- `mail` - counts for the **shared** mailbox, named in `mail.mailbox`. Item c.
+  Until 2026-08-22 this silently counted the PERSONAL inbox (the mail tool reads `/me/messages`
+  and cannot be aimed elsewhere), so a report of "at least 50 threads, 6 unread" was Azure
+  DevOps notifications and newsletters. It now searches by participant: measured 46 threads,
+  **0 unread** on bowloper@ for the same week. If `mail.mailbox` is not the address you expect,
+  the number is not item c.
 - `requestErrors.{subRequest,parentRequest,plannedQuotaRequest,planRegion,capacityOrder}`
   - each `{table, new24h, total, rows?, byRegion24h?}`. Items e-i.
 - `errors` - any source that failed. Report as "could not collect: <reason>",
@@ -560,9 +584,9 @@ Fifty-six pending, 21 unassigned, one Sev 2 still unowned. Mostly the PlannedQuo
 
 | # | Item | Status |
 |---|---|---|
-| a | Support + Feature Requests | ⚠️ 5 open questions, 3 new (blueprints ×2, AllowGenevaObtainer) |
-| b | AGC Support (Internal) | ⚠️ 1 — usnat deployment blocked on a missing user claim |
-| c | bowloper mail | ⚠️ at least 50 threads in 7d, 13 unread — redirect to Support |
+| a | Support + Feature Requests | ⚠️ 2 unanswered of 16 — oldest from July |
+| b | AGC Support (Internal) | ⚠️ 2 unanswered of 8 — usnat claim, GovSG blueprint |
+| c | bowloper mail | ✅ 46 threads in 7d, 0 unread |
 | d | Ticket query | ✅ same data as the queue above |
 | **e** | Sub requests in Error | 🔴 2 new — BatchQuota, InternalVm |
 | f | Parent requests in Error | ✅ none |
