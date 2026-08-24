@@ -421,7 +421,11 @@ if (sgSource === "config" || regionSource === "config") {
   log(`warn     : falling back to config, which is trusted without verification.`);
   log(`warn     : verify the service group and regions match what actually deploys.`);
 }
-if (pipeline.ev2ServiceGroupFallback && serviceGroup !== pipeline.ev2ServiceGroupFallback) {
+// Case-insensitively: an EV2 service group name is not case sensitive, and ABH
+// reports it lowercased while the rollout spec declares it in PascalCase, so an
+// exact comparison would cry drift on every single run.
+const sameGroup = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+if (pipeline.ev2ServiceGroupFallback && !sameGroup(serviceGroup, pipeline.ev2ServiceGroupFallback)) {
   log(`warn     : config ev2ServiceGroupFallback is ${pipeline.ev2ServiceGroupFallback},`);
   log(`warn     : but the builds report ${serviceGroup}. Update config/services.json.`);
 }
