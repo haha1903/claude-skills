@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+/**
+ * Remove a tag from an IcM incident's Tags collection (thin wrapper over iris
+ * icm.clearTag). WRITE OP. Inverse of icm-set-tag.
+ *
+ * Read-modify-write, same as icm-set-tag: reads the current Tags, drops the named
+ * one, PATCHes the rest back. Used to correct a tag set in error, e.g. replacing
+ * an AzRF.HasETA date that slipped.
+ *
+ *   icm-unset-tag <ID> <TAG>
+ */
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 2) { console.error("usage: icm-unset-tag ID TAG"); process.exit(2); }
+const [incidentId, tag] = argv;
+
+await icm.clearTag(incidentId, tag);
+const got = await icm.getIncident(incidentId);
+const tags = got && typeof got === "object" && Array.isArray(got.Tags) ? got.Tags : [];
+if (!tags.includes(tag)) {
+  console.log(`OK ${incidentId} untagged "${tag}"  (Tags=${JSON.stringify(tags)})`);
+} else {
+  console.error(`WARN ${incidentId}: "${tag}" still present after untag (Tags=${JSON.stringify(tags)})`);
+  process.exit(1);
+}

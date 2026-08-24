@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+/**
+ * Remove a keyword from an IcM incident's Keywords field (thin wrapper over iris
+ * icm.clearKeyword). WRITE OP. Inverse of icm-tag.
+ *
+ * Used to clear the on-call awaiting-decision marker once an incident goes
+ * terminal (decision executed): icm-tag <id> (adds oncall-bot-handled), then
+ * icm-untag <id> oncall-bot-awaiting-decision.
+ *
+ *   icm-untag <ID> <KEYWORD>
+ */
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 2) { console.error("usage: icm-untag ID KEYWORD"); process.exit(2); }
+const [incidentId, keyword] = argv;
+
+await icm.clearKeyword(incidentId, keyword);
+const got = await icm.getIncident(incidentId);
+const keywords = got && typeof got === "object" ? got.Keywords ?? "" : "";
+if (!String(keywords).includes(keyword)) {
+  console.log(`OK ${incidentId} untagged "${keyword}"  (Keywords="${keywords}")`);
+} else {
+  console.error(`WARN ${incidentId}: "${keyword}" still present after untag (Keywords="${keywords}")`);
+  process.exit(1);
+}

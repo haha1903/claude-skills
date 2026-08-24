@@ -1,0 +1,33 @@
+#!/usr/bin/env node
+/**
+ * Append a keyword to an IcM incident's Keywords field (thin wrapper over iris
+ * icm.addKeyword). WRITE OP.
+ *
+ * The on-call drain uses this to mark an incident handled so the next OData
+ * pending query skips it immediately (no warehouse lag). Read-modify-write:
+ * reads existing Keywords, appends deduped, PATCHes back.
+ *
+ * This writes Keywords, which is OUR marker space. It is NOT the Tags field that
+ * programs like AzRF read -- use icm-set-tag for those. Both are writable; they
+ * are just different fields, and tagging the wrong one leaves the program still
+ * counting the incident as untagged.
+ *
+ *   icm-tag <ID>                      # append the default handled keyword
+ *   icm-tag <ID> oncall-bot-handled   # append a specific keyword
+ */
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 1) { console.error("usage: icm-tag ID [KEYWORD]   (default KEYWORD=oncall-bot-handled)"); process.exit(2); }
+const [incidentId, keyword] = argv;
+const kw = keyword || icm.HANDLED_KEYWORD;
+
+await icm.addKeyword(incidentId, kw);
+const got = await icm.getIncident(incidentId);
+const keywords = got && typeof got === "object" ? got.Keywords ?? "" : "";
+if (String(keywords).includes(kw)) {
+  console.log(`OK ${incidentId} tagged "${kw}"  (Keywords="${keywords}")`);
+} else {
+  console.error(`WARN ${incidentId}: "${kw}" not present after tag (Keywords="${keywords}")`);
+  process.exit(1);
+}

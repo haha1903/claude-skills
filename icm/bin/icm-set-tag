@@ -1,0 +1,32 @@
+#!/usr/bin/env node
+/**
+ * Add a tag to an IcM incident's Tags collection (thin wrapper over iris
+ * icm.addTag). WRITE OP.
+ *
+ * Tags is the field program dashboards read -- AzRF (MountainPass SR15) tracks
+ * AzRF.HasETA.YYYY-MM-DD / AzRF.OK2Enforce / AzRF.SDPInProgress there, and its
+ * Kusto tracking table reads Tags, not Keywords. Use icm-tag for our own
+ * free-form Keywords markers instead.
+ *
+ * Tags is a collection and PATCH replaces it wholesale, so this is
+ * read-modify-write: it reads the current Tags, appends deduped, PATCHes the
+ * whole array back. Passing only the new tag to a raw PATCH would drop the tags
+ * already on the incident.
+ *
+ *   icm-set-tag <ID> <TAG>
+ */
+import { icm } from "../../_iris-shared/index.mjs";
+
+const argv = process.argv.slice(2);
+if (argv.length < 2) { console.error("usage: icm-set-tag ID TAG"); process.exit(2); }
+const [incidentId, tag] = argv;
+
+await icm.addTag(incidentId, tag);
+const got = await icm.getIncident(incidentId);
+const tags = got && typeof got === "object" && Array.isArray(got.Tags) ? got.Tags : [];
+if (tags.includes(tag)) {
+  console.log(`OK ${incidentId} tagged "${tag}"  (Tags=${JSON.stringify(tags)})`);
+} else {
+  console.error(`WARN ${incidentId}: "${tag}" not present after tag (Tags=${JSON.stringify(tags)})`);
+  process.exit(1);
+}
