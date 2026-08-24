@@ -70042,6 +70042,7 @@ __export(icm_exports, {
   ackMany: () => ackMany,
   addComment: () => addComment,
   addKeyword: () => addKeyword,
+  addTag: () => addTag,
   aggregateOncallByWeek: () => aggregateOncallByWeek,
   aggregateSummary: () => aggregateSummary,
   annotateOncallState: () => annotateOncallState,
@@ -70054,9 +70055,11 @@ __export(icm_exports, {
   buildMitigateBody: () => buildMitigateBody,
   buildPendingFilterApi2: () => buildPendingFilterApi2,
   buildResolveBody: () => buildResolveBody,
+  buildTags: () => buildTags,
   buildTransferBody: () => buildTransferBody,
   bulkRun: () => bulkRun,
   clearKeyword: () => clearKeyword,
+  clearTag: () => clearTag,
   collectFieldIds: () => collectFieldIds,
   commentMany: () => commentMany,
   compileCriteria: () => compileCriteria,
@@ -70064,8 +70067,11 @@ __export(icm_exports, {
   expandDateToken: () => expandDateToken,
   fetchSavedQueryProperties: () => fetchSavedQueryProperties,
   getIncident: () => getIncident,
+  historicalOwners: () => historicalOwners,
   isDaytimeSlot: () => isDaytimeSlot,
   isUrgent: () => isUrgent,
+  listByFilter: () => listByFilter,
+  listByOwner: () => listByOwner,
   listBySavedQuery: () => listBySavedQuery,
   listSharedQueries: () => listSharedQueries,
   localMidnightUtc: () => localMidnightUtc,
@@ -70088,6 +70094,7 @@ __export(icm_exports, {
   pendingKql: () => pendingKql,
   portalUrl: () => portalUrl,
   removeKeyword: () => removeKeyword,
+  removeTag: () => removeTag,
   resolve: () => resolve,
   resolveComposite: () => resolveComposite,
   resolveMany: () => resolveMany,
@@ -70097,6 +70104,7 @@ __export(icm_exports, {
   sharedQueryIncidents: () => sharedQueryIncidents,
   teamLeaf: () => teamLeaf,
   teamsById: () => teamsById,
+  titleSignature: () => titleSignature,
   transfer: () => transfer,
   update: () => update,
   writeFieldsCacheForTest: () => writeFieldsCacheForTest
@@ -70284,6 +70292,36 @@ async function clearKeyword(id, kw, timeout = 60) {
   const got = await getIncident(id, timeout);
   const existing = got && typeof got === "object" ? got.Keywords : "";
   return update(id, { Keywords: removeKeyword(existing, kw) }, timeout);
+}
+function buildTags(existing, tag) {
+  const tags = normalizeTags(existing);
+  return tags.includes(tag) ? tags : [...tags, tag];
+}
+function removeTag(existing, tag) {
+  return normalizeTags(existing).filter((t) => t !== tag);
+}
+function normalizeTags(existing) {
+  const raw = Array.isArray(existing) ? existing : [];
+  const out = [];
+  for (const t of raw) {
+    const s = String(t ?? "").trim();
+    if (s && !out.includes(s)) out.push(s);
+  }
+  return out;
+}
+async function addTag(id, tag, timeout = 60) {
+  const got = await getIncident(id, timeout);
+  const existing = got && typeof got === "object" ? got.Tags : [];
+  const tags = buildTags(existing, tag);
+  await update(id, { Tags: tags }, timeout);
+  return tags;
+}
+async function clearTag(id, tag, timeout = 60) {
+  const got = await getIncident(id, timeout);
+  const existing = got && typeof got === "object" ? got.Tags : [];
+  const tags = removeTag(existing, tag);
+  await update(id, { Tags: tags }, timeout);
+  return tags;
 }
 var API2_METADATA_BASE = "https://prod.microsofticm.com/api2/metadataapi";
 var SAVED_QUERY_SELECT = "Id,Severity,State,Title,CreatedDate,OwningTenantName,OwningTeamName,ContactAlias,NotificationStatus,HitCount,ChildCount,OwningServiceId,OwningTeamId,AcknowledgeBy,ParentId,IsCustomerImpacting,IsNoise,IsOutage,ExternalLinksCount,CustomFields,MitigateData,ImpactStartTime,Keywords";
@@ -70490,6 +70528,72 @@ async function listByFilter(filter, opts = {}) {
     if (id != null) r.PortalUrl = portalUrl(id);
   }
   return rows;
+}
+var GUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+function titleSignature(title) {
+  const t = String(title ?? "").trim();
+  const err = /Error occurred (\d+):(?:.*?@)?([A-Za-z][A-Za-z0-9]*)\s*$/.exec(t);
+  if (err) return { key: `${err[1]}@${err[2]}`, search: err[2] };
+  const errNoName = /Error occurred (\d+):/.exec(t);
+  if (errNoName) return { key: errNoName[1], search: `Error occurred ${errNoName[1]}` };
+  const svc = /^Service\s+\S+\s+(does not have an .*?)(?:\.|$)/.exec(t);
+  if (svc) return { key: svc[1], search: svc[1] };
+  const failed = /^([\s\S]*?)\s*failed with (?:exception|error)\s*:\s*([\s\S]*)$/.exec(t);
+  if (failed) {
+    const prefix = failed[1].replace(/\s*Task\s+[\s\S]*$/, "").replace(/[-\s]+$/, "").trim();
+    const head2 = stableHead(failed[2]);
+    return { key: `${prefix} ${head2}`.trim(), search: head2 || prefix };
+  }
+  if (t.startsWith("[")) {
+    const pipes = t.split("|").map((s) => s.trim());
+    if (pipes.length >= 2) {
+      const head2 = pipes.slice(0, 3).map((p) => p.replace(/\[.*$/, "").replace(GUID_RE, "").replace(/-{2,}/g, "-").replace(/[-\s]+$/, "").trim()).filter(Boolean).join(" | ");
+      if (head2) return { key: head2, search: pipes[0] };
+    }
+  }
+  const volatileToken = /[0-9a-f]{8}-[0-9a-f]{4}-|\d{1,2}\/\d{1,2}\/\d{4}|\d{4,}/i.exec(t);
+  let head = volatileToken ? t.slice(0, volatileToken.index) : t;
+  head = head.replace(/[-\s|:,.]+$/, "");
+  if (head.length > 80) head = head.slice(0, 80).replace(/\s+\S*$/, "");
+  return { key: head || t, search: head || t };
+}
+function stableHead(msg) {
+  const s = String(msg ?? "");
+  const typePrefix = /^\s*(?:[A-Z]\w*\.)+[A-Z]\w*(?:Exception|Error):\s*/.exec(s);
+  let out = typePrefix ? s.slice(typePrefix[0].length) : s.replace(/^\s+/, "");
+  const cut = /[0-9a-f]{8}-[0-9a-f]{4}-|\d{1,2}\/\d{1,2}\/\d{4}|\d{1,2}:\d{2}|\d{4,}/i.exec(out);
+  if (cut) out = out.slice(0, cut.index);
+  out = out.split(/(?:\.\s|:\s|\s+at\s+|,\s)/)[0];
+  out = out.replace(/[.…]+$/, "");
+  if (out.length > 60) out = out.slice(0, 60).replace(/\s+\S*$/, "");
+  return out.replace(/[-\s|:,]+$/, "").trim();
+}
+async function listByOwner(opts) {
+  const serviceId = opts.serviceId ?? requireConfig((c) => c.icm.owningServiceId, "icm.owningServiceId");
+  const alias = opts.alias.replace(/'/g, "''");
+  return listByFilter(
+    `OwningServiceId eq ${serviceId} and State eq 'Active' and ContactAlias eq '${alias}'`,
+    { timeout: opts.timeout }
+  );
+}
+async function historicalOwners(opts) {
+  const sig = typeof opts.signature === "string" ? { key: opts.signature, search: opts.signature } : opts.signature;
+  const serviceId = opts.serviceId ?? requireConfig((c) => c.icm.owningServiceId, "icm.owningServiceId");
+  const term = sig.search.replace(/'/g, "''");
+  const filter = `OwningServiceId eq ${serviceId} and (State eq 'RESOLVED' or State eq 'MITIGATED') and contains(Title, '${term}')`;
+  const rows = await listByFilter(filter, { timeout: opts.timeout });
+  const counts = /* @__PURE__ */ new Map();
+  for (const r of rows) {
+    const alias = String(r.ContactAlias ?? "").trim();
+    if (alias) counts.set(alias, (counts.get(alias) ?? 0) + 1);
+  }
+  const owners = [...counts.entries()].map(([alias, count]) => ({ alias, count })).sort((a, b) => b.count - a.count || a.alias.localeCompare(b.alias));
+  return {
+    search: sig.search,
+    closed: rows.length,
+    owners,
+    samples: rows.slice(0, 3).map((r) => Number(r.Id ?? r.IncidentId)).filter((n) => !Number.isNaN(n))
+  };
 }
 async function listBySavedQuery(sl, opts = {}) {
   const q = await resolveSavedQuery(sl, opts.timeout);
@@ -71429,11 +71533,19 @@ async function restJson(url2, opts = {}) {
 }
 async function recentRunsRest(defId, opts = {}) {
   const org = opts.org ?? ORG2, project = opts.project ?? PROJECT2;
-  const j = await restJson(
-    `${org}/${project}/_apis/build/builds?definitions=${defId}&$top=${opts.top ?? 6}&queryOrder=finishTimeDescending`,
-    opts
-  );
-  return (j.value ?? []).map((b) => ({
+  const top = opts.top ?? 6;
+  const base = `${org}/${project}/_apis/build/builds?definitions=${defId}&$top=${top}`;
+  const [inFlight, finished] = await Promise.all([
+    restJson(`${base}&statusFilter=inProgress,notStarted&queryOrder=queueTimeDescending`, opts),
+    restJson(`${base}&queryOrder=finishTimeDescending`, opts)
+  ]);
+  const rows = [
+    ...inFlight.value ?? [],
+    ...finished.value ?? []
+  ];
+  const byId = /* @__PURE__ */ new Map();
+  for (const b of rows) if (!byId.has(b.id)) byId.set(b.id, b);
+  return [...byId.values()].slice(0, top).map((b) => ({
     id: b.id,
     num: b.buildNumber,
     branch: b.sourceBranch,
