@@ -60,9 +60,11 @@ terminal at all (cron, CI) the build defaults to newest-succeeded and a missing
 
 Step 2 uses the approval system as the source of truth rather than scanning ADO
 pipeline timelines, so the comparison build cannot drift from what reviewers
-actually let through. BET, Lionrock and Ev2Extensions all share one serviceId and
-a request does not record its pipeline, so the approved requests are walked
-newest-first until one is found whose build number exists in this pipeline's runs.
+actually let through. BET, Lionrock and Ev2Extensions share one serviceId because
+they are one service: BET is part of Lionrock, which is also why one lease and one
+title prefix legitimately cover all three. A request does not record which pipeline
+it came from, so the approved requests are walked newest-first until one is found
+whose build number exists in this pipeline's runs.
 
 Step 3 usually finds the regions on the build itself but not the service group. A
 build parked at its Approval gate has not run its EV2 deploy task yet, and the
@@ -116,6 +118,10 @@ made in the portal.
 
 Leases are reusable: `15.1295` has covered 4 requests
 (`changesUsingThisExceptionCount`) and is still valid.
+
+It covers every configured pipeline, BET included, and that is correct rather than
+a mis-selection: BET is part of Lionrock, so a BET build legitimately produces a
+title reading `Lionrock incremental release - ...`.
 
 Do not read a lease's state off the `status` field of a single-lease query. That
 is the workflow node position, and `End` there only means the approval workflow
