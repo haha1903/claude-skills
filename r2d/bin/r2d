@@ -193,6 +193,8 @@ log(`service  : ${pipeline.serviceName} (${pipeline.serviceId})`);
 // entirely. These pipelines build AND release in one run, and R2D approval is the
 // gate before the release half, so the build that needs a request is by definition
 // still running. Filtering to completed runs hides exactly the right target.
+// recentRunsRest queries the in-flight runs separately for the same reason: ADO
+// drops a null finishTime from a finish-ordered page rather than sorting it first.
 const runs = await ado.recentRunsRest(pipeline.definitionId, { ...adoOpts, top: 200 });
 const runByNum = new Map(runs.map((r) => [r.num, r]));
 
@@ -231,9 +233,33 @@ const candidates = [...awaiting, ...completed.filter((c) => !awaiting.some((a) =
 let buildId = opt("build");
 let buildNumber;
 if (buildId) {
+  // Ask ADO for this build directly rather than scanning the page above. The page
+  // is bounded, so an older build is legitimately absent from it, and the build
+  // number is not optional: it is written to the ev2.build answer, which SafeFly
+  // stores as buildVersion and the NEXT run reads back to find the previously
+  // shipped build. Falling back to the raw id here would satisfy this run and
+  // strand the following one.
   const hit = runs.find((r) => String(r.id) === String(buildId));
-  buildNumber = hit?.num;
-  if (!hit) log(`warn     : build ${buildId} not in the last 200 runs; using it anyway`);
+  const build = hit ?? await ado.buildByIdRest(buildId, adoOpts).catch((e) => {
+    die(`cannot read build ${buildId} from ${adoCfg.org}/${adoCfg.project}`, String(e.message ?? e));
+  });
+  buildNumber = build.num;
+  if (!buildNumber) {
+    die(
+      `build ${buildId} has no build number`,
+      `ev2.build must carry the build number, because the next request looks the\n` +
+        `previously shipped build up by it.`,
+    );
+  }
+  // A build id is global to the project, so a typo can name a build belonging to
+  // another pipeline. That would compare and deploy the wrong thing.
+  const def = build.definitionId ?? hit?.definitionId;
+  if (def !== undefined && String(def) !== String(pipeline.definitionId)) {
+    die(
+      `build ${buildId} (${buildNumber}) belongs to definition ${def}, not ${pipeline.name} (${pipeline.definitionId})`,
+      `Pass a build from this pipeline, or select a different --pipeline.`,
+    );
+  }
 } else if (flag("latest") || !hasTty()) {
   const ok = candidates[0];
   if (!ok) {
@@ -316,34 +342,88 @@ if (!abh.isOnboarded(onboarding)) {
 }
 
 // ABH parses the service group and regions out of the build's EV2 rollout task.
-// Pipelines that only produce EV2 artifacts (a "Binplace Ev2 files" task) and
-// leave the rollout to a separate pipeline have nothing to parse, so /context
-// comes back empty and the config fallback takes over.
+//
+// A build parked at its Approval gate has not run that task yet, so the service
+// group is usually still missing at exactly the moment an R2D is raised. That is a
+// matter of timing, not of the pipeline being build-only: the same pipeline does
+// report a service group once the rollout has run. So rather than trusting a
+// hardcoded value, borrow it from this pipeline's last build that ABH could parse,
+// and treat the config entry as a last resort.
+//
+// Regions are handled separately because they usually survive when the service
+// group does not: they come from the rollout spec's selectors, which ABH can read
+// without the deploy task having run.
 const ctx = await abh.releaseContext(buildRef);
-const ev2Unit = abh.ev2Unit(ctx);
-let serviceGroup = ev2Unit?.name;
+let serviceGroup = abh.ev2Unit(ctx)?.name;
 let rawRegions = abh.ev2Regions(ctx);
-let fromFallback = false;
+let sgSource = serviceGroup ? "build" : null;
+let regionSource = rawRegions.length ? "build" : null;
 
-if (!serviceGroup) {
-  serviceGroup = pipeline.ev2ServiceGroupFallback;
-  rawRegions = pipeline.regionsFallback ?? [];
-  fromFallback = true;
-  if (!serviceGroup) {
-    die(
-      `ABH found no EV2 deployment unit for build ${buildId}, and no fallback is configured`,
-      `${pipeline.name} looks like a build-only pipeline: its EV2 rollout runs elsewhere,\n` +
-        `so ABH has no "Ev2 RA - Deploy" task to parse. Add ev2ServiceGroupFallback and\n` +
-        `regionsFallback for it in config/services.json.`,
-    );
+if (!serviceGroup || !rawRegions.length) {
+  // The last build SafeFly approved comes first: it demonstrably reached prod, so
+  // its rollout target is the one this release is following. A merely-succeeded
+  // build is a weaker donor, because a build that never shipped can have been
+  // built without ever running its rollout task, which is precisely the case where
+  // ABH has nothing to report. Here .469 through .474 all succeeded and none of
+  // them carries an EV2 unit, while .468 (the last approved one) does.
+  const donors = [
+    ...completed.filter((r) => String(r.id) === String(payloadBuildId)),
+    ...completed.filter(
+      (r) => String(r.id) !== String(buildId) && String(r.id) !== String(payloadBuildId),
+    ).slice(0, 5),
+  ];
+  for (const donor of donors) {
+    if (serviceGroup && rawRegions.length) break;
+    let donorCtx;
+    try {
+      donorCtx = await abh.releaseContext({ ...buildRef, buildId: donor.id });
+    } catch {
+      continue;
+    }
+    const donorSg = abh.ev2Unit(donorCtx)?.name;
+    const donorRegions = abh.ev2Regions(donorCtx);
+    if (!serviceGroup && donorSg) {
+      serviceGroup = donorSg;
+      sgSource = `build ${donor.num}`;
+    }
+    if (!rawRegions.length && donorRegions.length) {
+      rawRegions = donorRegions;
+      regionSource = `build ${donor.num}`;
+    }
   }
 }
 
-log(`ev2 sg   : ${serviceGroup}${fromFallback ? "  (config fallback, ABH /context was empty)" : ""}`);
-log(`regions  : ${rawRegions.join(", ") || "(none)"}${fromFallback ? "  (config fallback)" : ""}`);
-if (fromFallback) {
-  log(`warn     : service group and regions come from config, not from the build.`);
-  log(`warn     : verify they match what actually deploys before submitting.`);
+if (!serviceGroup && pipeline.ev2ServiceGroupFallback) {
+  serviceGroup = pipeline.ev2ServiceGroupFallback;
+  sgSource = "config";
+}
+if (!rawRegions.length && pipeline.regionsFallback?.length) {
+  rawRegions = pipeline.regionsFallback;
+  regionSource = "config";
+}
+
+if (!serviceGroup) {
+  die(
+    `no EV2 service group for build ${buildId}: ABH could not parse it, no recent build had one, and no fallback is configured`,
+    `Add ev2ServiceGroupFallback and regionsFallback for ${pipeline.name} in\n` +
+      `config/services.json, or wait until the rollout task has run.`,
+  );
+}
+
+// A config value can drift from what actually deploys, and a borrowed one is only
+// as good as the assumption that this build targets the same place. Say which is
+// which, and disagree loudly when the config no longer matches the builds.
+const note = (source) => (source === "build" ? "" : `  (from ${source})`);
+log(`ev2 sg   : ${serviceGroup}${note(sgSource)}`);
+log(`regions  : ${rawRegions.join(", ") || "(none)"}${note(regionSource)}`);
+
+if (sgSource === "config" || regionSource === "config") {
+  log(`warn     : falling back to config, which is trusted without verification.`);
+  log(`warn     : verify the service group and regions match what actually deploys.`);
+}
+if (pipeline.ev2ServiceGroupFallback && serviceGroup !== pipeline.ev2ServiceGroupFallback) {
+  log(`warn     : config ev2ServiceGroupFallback is ${pipeline.ev2ServiceGroupFallback},`);
+  log(`warn     : but the builds report ${serviceGroup}. Update config/services.json.`);
 }
 
 const summary = await abh.releaseSummary(buildRef, payloadBuildId);

@@ -70040,6 +70040,7 @@ __export(icm_exports, {
   WAREHOUSE_DB: () => WAREHOUSE_DB,
   ack: () => ack,
   ackMany: () => ackMany,
+  ackManyAsOwner: () => ackManyAsOwner,
   addComment: () => addComment,
   addKeyword: () => addKeyword,
   addTag: () => addTag,
@@ -70068,6 +70069,7 @@ __export(icm_exports, {
   fetchSavedQueryProperties: () => fetchSavedQueryProperties,
   getIncident: () => getIncident,
   historicalOwners: () => historicalOwners,
+  isAcked: () => isAcked,
   isDaytimeSlot: () => isDaytimeSlot,
   isUrgent: () => isUrgent,
   listByFilter: () => listByFilter,
@@ -71054,13 +71056,29 @@ async function bulkRun(itemFn, items, workers = 8) {
 function ownerOf(got) {
   return got && typeof got === "object" ? got.OwningContactAlias ?? null : null;
 }
+function isAcked(got) {
+  const data = got && typeof got === "object" ? got.AcknowledgementData : void 0;
+  return data?.IsAcknowledged === true;
+}
 function assignMany(mapping, workers = 8) {
   return bulkRun(async (iid) => {
     const alias = mapping[iid];
     try {
-      await assign(iid, alias);
-      const owner = ownerOf(await getIncident(iid));
-      return owner === (alias || null) ? [iid, null] : [iid, `verify: expected ${JSON.stringify(alias)} got ${JSON.stringify(owner)}`];
+      if (!alias) {
+        await assign(iid, alias);
+        const owner2 = ownerOf(await getIncident(iid));
+        return owner2 ? [iid, `verify: expected unassigned, got ${JSON.stringify(owner2)}`] : [iid, null];
+      }
+      await ack(iid, alias);
+      let got = await getIncident(iid);
+      if (ownerOf(got) !== alias) {
+        await assign(iid, alias);
+        got = await getIncident(iid);
+      }
+      const owner = ownerOf(got);
+      if (owner !== alias) return [iid, `verify: expected ${JSON.stringify(alias)} got ${JSON.stringify(owner)}`];
+      if (!isAcked(got)) return [iid, `verify: owner set to ${alias} but still not acknowledged`];
+      return [iid, null];
     } catch (e) {
       return [iid, String(e.message).slice(0, 150)];
     }
@@ -71071,8 +71089,28 @@ function ackMany(incidentIds, contactAlias, workers = 8) {
   return bulkRun(async (iid) => {
     try {
       await ack(iid, alias);
-      const owner = ownerOf(await getIncident(iid));
-      return owner === alias ? [iid, null] : [iid, `verify: owner ${JSON.stringify(owner)} != ${JSON.stringify(alias)}`];
+      const got = await getIncident(iid);
+      const owner = ownerOf(got);
+      if (owner !== alias) return [iid, `verify: owner ${JSON.stringify(owner)} != ${JSON.stringify(alias)}`];
+      if (!isAcked(got)) return [iid, `verify: ack call returned but IsAcknowledged is false`];
+      return [iid, null];
+    } catch (e) {
+      return [iid, String(e.message).slice(0, 150)];
+    }
+  }, incidentIds, workers);
+}
+function ackManyAsOwner(incidentIds, workers = 8) {
+  return bulkRun(async (iid) => {
+    try {
+      const before = await getIncident(iid);
+      const owner = ownerOf(before);
+      if (!owner) return [iid, "skipped: unowned, so there is no owner to acknowledge as"];
+      if (isAcked(before)) return [iid, null];
+      await ack(iid, owner);
+      const after = await getIncident(iid);
+      if (ownerOf(after) !== owner) return [iid, `verify: owner changed ${owner} -> ${JSON.stringify(ownerOf(after))}`];
+      if (!isAcked(after)) return [iid, "verify: ack call returned but IsAcknowledged is false"];
+      return [iid, null];
     } catch (e) {
       return [iid, String(e.message).slice(0, 150)];
     }
@@ -71266,6 +71304,7 @@ __export(ado_exports, {
   ORG: () => ORG2,
   PROJECT: () => PROJECT2,
   adoToken: () => adoToken,
+  buildByIdRest: () => buildByIdRest,
   discoverTenant: () => discoverTenant,
   extractEnvironments: () => extractEnvironments,
   findEv2PortalUrl: () => findEv2PortalUrl,
@@ -71545,14 +71584,25 @@ async function recentRunsRest(defId, opts = {}) {
   ];
   const byId = /* @__PURE__ */ new Map();
   for (const b of rows) if (!byId.has(b.id)) byId.set(b.id, b);
-  return [...byId.values()].slice(0, top).map((b) => ({
+  return [...byId.values()].slice(0, top).map(asRun);
+}
+function asRun(b) {
+  return {
     id: b.id,
     num: b.buildNumber,
     branch: b.sourceBranch,
     status: b.status,
     result: b.result,
-    finished: b.finishTime
-  }));
+    finished: b.finishTime,
+    // A build id is unique per project, not per pipeline, so a caller holding an
+    // id from elsewhere needs this to tell whether it belongs to the definition
+    // it is about to act on.
+    definitionId: b.definition?.id
+  };
+}
+async function buildByIdRest(buildId, opts = {}) {
+  const org = opts.org ?? ORG2, project = opts.project ?? PROJECT2;
+  return asRun(await restJson(`${org}/${project}/_apis/build/builds/${buildId}`, opts));
 }
 async function timelineRest(buildId, opts = {}) {
   const org = opts.org ?? ORG2, project = opts.project ?? PROJECT2;
@@ -72219,6 +72269,7 @@ __export(safefly_exports, {
   listRequests: () => listRequests,
   matchRegion: () => matchRegion,
   missingRequiredAnswers: () => missingRequiredAnswers,
+  plainBuildVersion: () => plainBuildVersion,
   questionIdByName: () => questionIdByName,
   safeflyToken: () => safeflyToken,
   saveRequest: () => saveRequest,
@@ -72322,11 +72373,24 @@ async function listRequests(o = {}, opts = {}) {
   );
   const r = d.requests;
   return {
-    data: r.data ?? [],
+    data: (r.data ?? []).map((req) => ({ ...req, buildVersion: plainBuildVersion(req.buildVersion) })),
     hasNextPage: Boolean(r.pageInfo?.hasNextPage),
     endCursor: r.pageInfo?.endCursor,
     totalCount: r.totalCount
   };
+}
+function plainBuildVersion(raw) {
+  if (!raw) return raw;
+  const s = raw.trim();
+  if (!s.startsWith("[")) return s;
+  try {
+    const parsed = JSON.parse(s);
+    if (!Array.isArray(parsed)) return s;
+    const first = parsed.find((v) => typeof v === "string" && v.trim());
+    return first ? String(first).trim() : void 0;
+  } catch {
+    return s;
+  }
 }
 function lastApprovedBuild(requests, excludeDisplayId) {
   return requests.find(

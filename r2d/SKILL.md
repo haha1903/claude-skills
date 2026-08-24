@@ -64,11 +64,24 @@ actually let through. BET, Lionrock and Ev2Extensions all share one serviceId an
 a request does not record its pipeline, so the approved requests are walked
 newest-first until one is found whose build number exists in this pipeline's runs.
 
-Step 3 falls back to `ev2ServiceGroupFallback` / `regionsFallback` from the config
-when ABH returns no deployment units. That happens for build-only pipelines like
-Lionrock, whose 419796 merely emits EV2 artifacts ("Binplace Ev2 files") while the
-rollout runs elsewhere, leaving ABH nothing to parse. Every fallback run warns
-twice, because those values are trusted without verification.
+Step 3 usually finds the regions on the build itself but not the service group. A
+build parked at its Approval gate has not run its EV2 deploy task yet, and the
+service group comes from that task, while the regions come from the rollout spec's
+selectors, which ABH can read earlier. This is timing, not a property of the
+pipeline: 419796 does report a service group once its rollout has run.
+
+So whatever the build does not carry is borrowed from a previous build of the same
+pipeline, starting with the one SafeFly last approved. That build demonstrably
+reached prod, which makes it a stronger donor than a merely-succeeded build: a
+build that never shipped may never have run its rollout task, and is exactly the
+kind that has nothing to report. For 419796 the five newest succeeded builds
+(`.470` through `.474`) all lack an EV2 unit for that reason, while `.468`, the
+last approved one, has it.
+
+`ev2ServiceGroupFallback` / `regionsFallback` in the config are the last resort,
+and using either warns, because those values are trusted without verification.
+When the config disagrees with what the builds report, the discovered value wins
+and the mismatch is called out so the config can be corrected.
 
 ## Prerequisites
 
@@ -165,6 +178,32 @@ SafeFly answers `QUESTION_BINDING_ERROR` / "Property 'Change Request Title' was
 not provided", and `findCompatibleLease` reports that as a plain "no lease found".
 `leaseCompatibility()` is the function to reach for when a lease is rejected and
 the reason matters.
+
+**An in-flight build is missing from a finish-ordered build list.** ADO does not
+sort a null `finishTime` first under `queryOrder=finishTimeDescending`, it drops the
+row: the running build was absent even from a `$top=200` page. Since the build
+needing an R2D is by definition still running, `ado.recentRunsRest` asks for the
+in-flight runs in a second query. The completed runs keep finish order, which is
+load-bearing in its own right, because a re-run holds its old queue time and so
+`queueTimeDescending` reports a different "last completed".
+
+**`ev2.build` must carry the build number, never the build id.** SafeFly stores it
+as `buildVersion`, and the *next* request resolves the previously shipped build by
+looking that value up among the pipeline's runs. A raw id satisfies the run that
+writes it and strands the following one, so a missing build number is now fatal
+rather than a warning, and `--build` resolves the id through `ado.buildByIdRest`
+instead of scanning a bounded page.
+
+**`buildVersion` comes back in two shapes.** The same build reads as
+`"1.0.03515.468"` from one request and `'["1.0.03515.468"]'` from another (15.3432
+vs 15.3434), depending on how the answer was stored. The encoded form matches
+nothing in a lookup, which looks exactly like "this request belongs to another
+pipeline"; `safefly.listRequests` normalises it.
+
+**A build id is unique per project, not per pipeline.** Nothing stops `--build`
+from naming a build of another pipeline that shares the service, which would
+compare and deploy the wrong thing, so the definition is checked against the
+selected pipeline.
 
 ## Config
 
