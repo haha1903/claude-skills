@@ -1,6 +1,7 @@
 ---
 name: kusto-query
 description: Use when querying Azure Data Explorer (Kusto) clusters — covers the iris bin (bin/query.mjs), Azure CLI token auth, and the raw REST query/management endpoints as a fallback
+summary: Run a KQL query against a Kusto cluster
 ---
 
 # Kusto Query
@@ -22,10 +23,6 @@ node ~/.claude/skills/kusto-query/bin/query.mjs --mgmt \
 ```
 
 Output is JSON `{cols, rows}` (pipe to `jq`). Auth is the signed-in `az` user — run `az login` first, and connect the VPN for internal clusters. The bin calls the iris SDK (`kusto.queryKusto` / `kusto.mgmtKusto`) through `_iris-shared`, auto-building iris on first run.
-
-> The Python helper `scripts/kusto_helper.py` (re-exporting `msapi.kusto`) is
-> retained for skills that still import it (e.g. icm-query) and will move to iris
-> when the icm module migrates. New code should use the bin above.
 
 ## Raw REST (fallback)
 
@@ -55,13 +52,6 @@ curl -s -X POST "https://CLUSTER.REGION.kusto.windows.net/v1/rest/mgmt" \
   -d '{"db":"DATABASE","csl":".show tables"}'
 ```
 Response: `{ "Tables": [{ "Columns": [...], "Rows": [...] }] }`
-
-## Python helper (legacy, for icm-query only)
-
-`scripts/kusto_helper.py` re-exports `msapi.kusto` (`query_kusto` / `mgmt_kusto` /
-`list_tables` / `show_schema`). It is retained only because `icm-query` still
-imports it; it moves to iris when the icm module migrates. Do not write new code
-against it — use `bin/query.mjs` above.
 
 ## Common Management Commands
 

@@ -2,6 +2,7 @@
 name: icm
 description: Use when the user wants to read or act on a Microsoft IcM incident programmatically — get incident details, mitigate, acknowledge, resolve, assign to a person, update fields (severity/title/etc), transfer to a team, add a discussion comment, or look up incident metadata from an icm.ad.msft.net / portal.microsofticm.com URL or incident ID.
 summary: Read or act on one IcM incident: details, comment, tag, mitigate, resolve
+handles: [Internal.Noise, Internal.ExternalFault]
 ---
 
 # IcM REST API
@@ -20,10 +21,11 @@ Located in `~/.claude/skills/icm/bin/` — all executable, no args parsing neede
 | `icm-call METHOD PATH [BODY]` | Generic OData call. `PATH` is appended to `…/api/user/`. |
 | `icm-mitigate ID "REASON"` | Mitigate an incident. Defaults: `HowFixed=ByDesign`, `MitigateContactAlias=` current user (override with `$ICM_CONTACT_ALIAS`). |
 | `icm-route-by-history [--json] [--owner ALIAS]` | **Run this BEFORE assigning anything.** Suggests an owner per family by reading who closed the same signature before. Read-only. `--owner` reads one person's active backlog instead of the pending queue. See "Who owns this?" below. |
-| `icm-assign ID ALIAS` | Assign to an individual (sets `OwningContactAlias`; verifies with a GET). `ALIAS=""` unassigns. |
-| `icm-assign-many ALIAS ID [ID …]` | Bulk-assign many incidents to one person; concurrent, per-incident GET verify. `ALIAS -` reads ids from stdin. |
-| `icm-ack-many CONTACT ID [ID …]` | Bulk-acknowledge (ack auto-sets owner to CONTACT); concurrent, per-incident GET verify. `CONTACT -` reads ids from stdin. |
-| `icm-tag ID [KEYWORD]` | Append a keyword to `Keywords` (read-modify-write, deduped; verifies with a GET). Default `KEYWORD=oncall-bot-handled`. See the two on-call tags below. **`Keywords`, not `Tags` — see below.** |
+| `icm-assign ID ALIAS` | Assign to an individual **and acknowledge as them** (both states; verifies both). `ALIAS=""` unassigns. |
+| `icm-assign-many ALIAS ID [ID …]` | Bulk-assign to one person **and acknowledge as them**; concurrent, per-incident verify of owner AND ack. `ALIAS -` reads ids from stdin. |
+| `icm-ack-many CONTACT ID [ID …]` | Bulk-acknowledge **as one person, which also assigns them all to that person**. Use to CLAIM work. `CONTACT -` reads ids from stdin. |
+| `icm-ack-as-owner ID [ID …]` | Acknowledge each as **its own current owner**, leaving ownership alone. For repairing assigned-but-unacked incidents. Skips unowned ones rather than claiming them. |
+| `icm-tag ID [--family SIG] [--action WHAT]` | Mark handled in the **`Lionrock_Bot` custom field** (ours alone, structured, filterable). `--keyword KW` uses the legacy `Keywords` path, still needed for the awaiting marker. See "Three fields, three purposes" below. |
 | `icm-untag ID KEYWORD` | Remove a keyword from `Keywords` (inverse of `icm-tag`; verifies with a GET). Used to clear the awaiting marker when an incident goes terminal. |
 | `icm-set-tag ID TAG` | Add a tag to the `Tags` collection (read-modify-write; verifies with a GET). **This is the field program dashboards read** (AzRF etc.). |
 | `icm-unset-tag ID TAG` | Remove a tag from `Tags` (inverse of `icm-set-tag`; verifies with a GET). |
@@ -47,28 +49,42 @@ icm-call POST 'incidents(800736577)/AcknowledgeIncident' \
 icm-call POST 'incidents(800736577)/ResolveIncident' \
   '{"ResolveParameters":{"ResolveContactAlias":"haichang"}}'
 
-# Assign to a person (sets OwningContactAlias)
+# Assign to a person: sets OwningContactAlias AND acknowledges as them
 icm-assign 800736577 lingc
-# equivalently, the raw PATCH:
-icm-call PATCH 'incidents(800736577)' '{"OwningContactAlias":"lingc"}'
+# NOT equivalent -- the raw PATCH sets the owner and leaves it UNACKNOWLEDGED, so it keeps
+# paging and still reads as untriaged. Use it only to unassign.
+icm-call PATCH 'incidents(800736577)' '{"OwningContactAlias":""}'
 
 # Bulk assign / ack (client-side concurrency — IcM has NO $batch endpoint)
 icm-route-by-history                                # FIRST: who does history say owns each family?
 icm-assign-many lingc 828738586 828738619 828738701
 
-# ACK SETS THE OWNER, so acking is claiming. Only ack what is genuinely yours to work.
-icm-ack-many haichang 827735814 827735820
-# Acking every unowned incident is NOT the same as triaging them, and it is how 20
-# sovereign-cloud mirrors ended up under one person: the work lives in another IcM
-# instance, so claiming them achieved nothing except moving them onto his queue.
-# Route by history and assign; ack only where the work is actually ours.
+# ACK SETS THE OWNER to whatever alias you pass. Measured: owner=haichang, ack as
+# lingc -> owner becomes lingc. So the alias is not a signature, it is an assignment.
+icm-ack-many haichang 827735814 827735820          # claims them for haichang
+icm-ack-many lingc 828738586                        # acks AND assigns to lingc
+# Two consequences, both learned the hard way:
+#   1. Acking every unowned incident is not triaging them. That is how 20 sovereign-cloud
+#      mirrors ended up under one person -- the work lives in another IcM instance, so
+#      claiming them moved them onto his queue and achieved nothing else.
+#   2. Do NOT use icm-ack-many to acknowledge incidents that already have owners: one
+#      alias for a mixed batch moves them all onto that person's queue. Use this instead,
+#      which acks each as ITS OWN owner and skips unowned ones:
+icm-ack-as-owner 854705420 855325468               # ownership untouched, ack filled in
+# 37 assigned-but-unacked incidents were repaired this way; one shared alias would have
+# pulled all 37 onto a single queue.
 
-# On-call drain markers (two tags, different snapshot semantics):
-icm-tag 800736577                                  # oncall-bot-handled (terminal) — dropped from the next snapshot
-icm-tag 800736577 oncall-bot-awaiting-decision     # awaiting a human decision — STAYS in the snapshot (flagged), not re-investigated
-icm-untag 800736577 oncall-bot-awaiting-decision   # clear awaiting once the decision is executed (then icm-tag it handled)
+# Mark handled. Goes to the Lionrock_Bot custom field, and records the judgement rather
+# than just the fact: WHEN, WHICH family, WHAT was done.
+icm-tag 854162342 --family '500250@CheckAlreadyDoneError' --action 'assigned:lingc'
+icm-tag 854162342                                   # timestamp only, when there is no detail yet
 
-# Program tags live in Tags, NOT Keywords — icm-tag would write a field AzRF never reads.
+# The awaiting marker still lives in Keywords, because it has the opposite snapshot
+# semantics: it must NOT hide the incident, only flag it as waiting on a person.
+icm-tag 800736577 --keyword oncall-bot-awaiting-decision
+icm-untag 800736577 oncall-bot-awaiting-decision   # clear it once the decision is executed
+
+# Program tags live in Tags — a third field again, and the one AzRF dashboards read.
 icm-set-tag 854368170 AzRF.HasETA.2026-08-28        # read-modify-write: keeps AzRF.SME already there
 icm-unset-tag 854368170 AzRF.HasETA.2026-08-28      # e.g. to correct a slipped ETA date
 
@@ -126,6 +142,35 @@ distinct from the POST `*Incident` actions. Two gotchas that cost time if unknow
   `TransferIncident`** (team-level, no contact field). PATCHing those directly
   won't stick — the Get-Incident doc marks them "modified only when transferred".
 
+**Assign does NOT acknowledge, and ack is not a signature.** They are separate states and
+each needs its own call. `AcknowledgeIncident` writes `OwningContactAlias` to whatever
+alias you pass, so:
+
+- to ack something you are taking on, pass **your** alias — that claims it;
+- to ack an **already-assigned** incident without stealing it, pass its **current owner**.
+
+Measured: `owner=haichang`, ack as `lingc`, and the owner becomes `lingc`. 37 incidents
+were repaired by passing each one's existing owner; passing a single alias for the batch
+would have pulled all 37 onto one queue.
+
+### Do not verify a write with a list query
+
+`listByFilter("... and State eq 'Active'")` **omitted an incident whose own `Status` was
+`Active`** — 854705420, owner set, returned by a direct GET and absent from the list. The
+same face separately reported 251 unowned incidents where a per-incident read found none.
+
+So a list query is fine for finding candidates and **worthless as proof**. Three audits
+built on one reported "0 remaining" while 37 were in fact unacked, and the wrong answer
+was the confident-looking one. Verify by GETting the ids you wrote to:
+
+```bash
+icm-call GET 'incidents(<id>)'   # then read AcknowledgementData.IsAcknowledged
+```
+
+Also: `AcknowledgeDate` and `AcknowledgedBy` at the top level are **always null**, even on
+an acknowledged incident. The real state is `AcknowledgementData.IsAcknowledged`. Reading
+the top-level fields reports every incident as unacked.
+
 Writable via PATCH: `OwningContactAlias, Severity, Title, Keywords, Tags, Summary,
 IsCustomerImpacting, IsNoise, IsSecurityRisk, Component, CommitDate`. Read-only:
 `Id, CreateDate, ModifiedDate, HitCount`. PATCH returns 204/empty on success —
@@ -146,13 +191,45 @@ column. Tagging with `icm-tag` writes `Keywords`, which that program never reads
 so the incident goes on counting as untagged while the portal shows nothing — and
 for AzRF a missing ETA tag is itself the EVP-escalation trigger.
 
-- `Keywords` — `Edm.String`, `;`-joined. Our own marker space (on-call drain). `icm-tag` / `icm-untag`.
-- `Tags` — `Collection(Edm.String)`. What programs read. `icm-set-tag` / `icm-unset-tag`.
-
 **`Tags` PATCH replaces the whole collection**, so it is always
 read-modify-write. `PATCH {"Tags":["mine"]}` silently drops every tag already on
 the incident, including ones set by other people. Both helpers read first;
 a hand-written `icm-call PATCH` must too.
+
+### Three fields, three purposes
+
+| Field | Shape | Who writes it | Ours to use for |
+|---|---|---|---|
+| **`Lionrock_Bot`** (custom field, id 51090) | long string | **only us** | the handled marker. `icm-tag` |
+| `Keywords` | `Edm.String`, `;`-joined | **shared** — 254 `NotPortalAlertSource`, 73 `blocked`, 30 `Triaged` against 48 of ours, measured | the awaiting marker only. `icm-tag --keyword` / `icm-untag` |
+| `Tags` | `Collection(Edm.String)` | shared with automation (`JobSeverity=`, `IncidentEscalationPolicy=`) | program tags AzRF reads. `icm-set-tag` / `icm-unset-tag` |
+
+**The handled marker moved off `Keywords`** because we are not its only writer, and marking
+there is a read-modify-write of a string a colleague's automation may be editing at the same
+moment. `blocked` also appearing as `Blocked` is what several independent writers look like.
+
+The custom field is also structured, which `Keywords` could not be:
+
+```
+handled=2026-08-24T09:20Z family=500250@CheckAlreadyDoneError action=assigned:lingc
+```
+
+so the portal shows the judgement, not just that something touched the incident. Excluding
+handled incidents is server-side:
+
+```
+not CustomFields/any(a: a/CustomFieldId eq 51090 and a/StringValue ne null)
+```
+
+**The `Keywords` clause is still applied alongside it** and must stay: 48 ACTIVE incidents
+were tagged before the move, and dropping it flushes them back into the queue looking
+untriaged. Check that no active incident carries the keyword before removing it — do not
+assume the backlog has drained.
+
+Two things about custom fields that cost a wrong answer each, both in
+`iris/docs/CAPABILITIES.md`: the PATCH accepts `BigString` and rejects the `Textarea` that
+`GetEditableProperty` advertises, and a long-string field CAN be filtered even though
+`customFields.md` says it cannot. A value also **cannot be cleared**, only replaced.
 
 ## Endpoint pattern
 

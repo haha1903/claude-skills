@@ -311,21 +311,50 @@ What must not happen is tagging with the finding recorded nowhere at all.
 adding `$orderby=SubmitDate desc` makes IcM return an EMPTY list with no error, which reads
 exactly like "the comment was never written". Query without `$orderby` and sort locally.
 
-### Who to assign to
+### Who to assign to: run the tool, do not work it out
 
-After the ack the incident is already yours, so an assign is only needed to hand it on:
+**Do not reason about ownership from the title.** Run this first:
 
-| Situation | Action |
+```bash
+icm-route-by-history                 # suggested owner per family, read-only
+icm-route-by-history --json          # to pipe into icm-assign-many
+icm-route-by-history --owner <alias> # one person's active backlog instead of the queue
+```
+
+It reads who closed the same thing before and prints the histogram behind each
+suggestion. Doing this by hand went wrong four separate ways in one pass, and every
+wrong answer looked right -- the failure mode is an empty result, which reads as "this
+family has no history" rather than as "the query was wrong". The rules, the exact
+query, and each way it misleads are in the wiki:
+**`concepts/icm-ownership-routing-by-history.md`** (`wiki-query` finds it). Read that
+before overriding the tool.
+
+Three things it will not decide for you:
+
+| It says | Do |
 |---|---|
-| The owning team / person is identifiable (the wiki names them, the error is theirs, a sibling incident is already theirs) | **`icm-assign <id> <alias>`** -- hand it over |
-| You investigated and the internal owner is not obvious | **leave it with you.** The ack already did that; no second call needed |
-| It belongs to an EXTERNAL team, outside our IcM | **ask** -- a transfer pushes it past our boundary and cannot be undone quietly |
+| a settled owner | `icm-assign-many <alias> <id> …` -- one call per person, not per incident |
+| `tie` (top alias leads by only 1) | assign to the top alias anyway; an owner who can re-route beats unowned |
+| `no-history` | assign to `haichang`. Nothing closed has ever matched, so there is no answer to find |
 
-Assigning to `haichang` is not a failure state. It puts the incident on a real person's
-queue with your comment attached, which is strictly better than unassigned, and he can
-re-route it in one click. **Unassigned is the only wrong answer.**
+**Verify the alias is still current.** The tool cannot know who has left, and a
+departed colleague's alias still accepts an assign: one was holding 64 active
+incidents, invisible to every pending run because they were owned. Off the on-call
+roster is NOT the same as gone -- someone can be employed and simply not on rotation,
+so **ask** rather than infer. Route a departed person's backlog by each family's own
+history, not by "X left, so give it to Y".
 
-Use `icm-assign-many <alias> <id> <id> …` for a family -- one call, not twenty.
+Then three exclusions the routing table cannot see. Skip **Sev <= 2** (someone is
+working it right now; Sev 2.5 is stored as `25`), skip anything **already owned by the
+person history picked** (a no-op that still sends a notification), and skip anything
+**owned by someone else** -- report the disagreement instead of moving it, same rule as
+the ack. On a real pass these removed 53 of 134.
+
+`icm-assign haichang` is not a failure state: a real person's queue, re-routable in one
+click. **Unassigned is the only wrong answer.**
+
+An EXTERNAL team, outside our IcM, is still **ask** -- a transfer crosses our boundary
+and cannot be undone quietly.
 
 ### What may be done without asking
 

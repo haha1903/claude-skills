@@ -1,33 +1,63 @@
 #!/usr/bin/env node
 /**
- * Append a keyword to an IcM incident's Keywords field (thin wrapper over iris
- * icm.addKeyword). WRITE OP.
+ * Mark an IcM incident handled, so the next pending query skips it. WRITE OP.
  *
- * The on-call drain uses this to mark an incident handled so the next OData
- * pending query skips it immediately (no warehouse lag). Read-modify-write:
- * reads existing Keywords, appends deduped, PATCHes back.
+ * Writes the `Lionrock_Bot` service-level custom field, NOT `Keywords`. Keywords is one
+ * `;`-joined string shared with everyone else who writes it -- measured on a live queue:
+ * 254 incidents carry `NotPortalAlertSource`, 73 `blocked`, 30 `Triaged`, against 48 of
+ * ours, and `blocked` also appears as `Blocked`, which is the signature of several
+ * writers. Marking there is a read-modify-write of a field a colleague's automation may
+ * be editing at the same moment.
  *
- * This writes Keywords, which is OUR marker space. It is NOT the Tags field that
- * programs like AzRF read -- use icm-set-tag for those. Both are writable; they
- * are just different fields, and tagging the wrong one leaves the program still
- * counting the incident as untagged.
+ * The custom field is also structured, which Keywords could not be: the value records
+ * WHEN, WHICH family, and WHAT was done, so the portal shows the judgement rather than
+ * just that something touched the incident.
  *
- *   icm-tag <ID>                      # append the default handled keyword
- *   icm-tag <ID> oncall-bot-handled   # append a specific keyword
+ *   icm-tag <ID>                                    # handled now, no detail
+ *   icm-tag <ID> --family <sig> --action <what>     # the useful form
+ *   icm-tag <ID> --keyword oncall-bot-awaiting-decision
+ *                                                   # the OLD Keywords path, still needed
+ *                                                   # for the awaiting marker
+ *
+ * `--keyword` exists because the awaiting-decision marker still lives in Keywords: it has
+ * different snapshot semantics (it must NOT hide the incident), and moving it is a separate
+ * change. Reading Keywords also continues, so the 48 incidents tagged before the move stay
+ * excluded.
  */
 import { icm } from "../../_iris-shared/index.mjs";
 
 const argv = process.argv.slice(2);
-if (argv.length < 1) { console.error("usage: icm-tag ID [KEYWORD]   (default KEYWORD=oncall-bot-handled)"); process.exit(2); }
-const [incidentId, keyword] = argv;
-const kw = keyword || icm.HANDLED_KEYWORD;
-
-await icm.addKeyword(incidentId, kw);
-const got = await icm.getIncident(incidentId);
-const keywords = got && typeof got === "object" ? got.Keywords ?? "" : "";
-if (String(keywords).includes(kw)) {
-  console.log(`OK ${incidentId} tagged "${kw}"  (Keywords="${keywords}")`);
-} else {
-  console.error(`WARN ${incidentId}: "${kw}" not present after tag (Keywords="${keywords}")`);
-  process.exit(1);
+if (!argv.length) {
+  console.error("usage: icm-tag ID [--family SIG] [--action WHAT] [--keyword KW]");
+  process.exit(2);
 }
+const incidentId = argv[0];
+const flag = (name) => {
+  const i = argv.indexOf(`--${name}`);
+  return i !== -1 ? argv[i + 1] : undefined;
+};
+
+// The legacy path: an explicit --keyword still writes Keywords. Also accepts the old
+// positional form (`icm-tag <id> <keyword>`) so existing muscle memory does not silently
+// write the wrong field.
+const keyword = flag("keyword") ?? (argv[1] && !argv[1].startsWith("--") ? argv[1] : undefined);
+if (keyword) {
+  await icm.addKeyword(incidentId, keyword);
+  const got = await icm.getIncident(incidentId);
+  const kws = String(got?.Keywords ?? "");
+  if (!kws.includes(keyword)) {
+    console.error(`WARN ${incidentId}: "${keyword}" not present after tag (Keywords="${kws}")`);
+    process.exit(1);
+  }
+  console.log(`OK ${incidentId} keyword "${keyword}"  (Keywords="${kws}")`);
+  process.exit(0);
+}
+
+// markHandled verifies with an independent read and throws if the value did not stick, so
+// there is nothing to re-check here.
+const mark = await icm.markHandled(incidentId, {
+  handled: new Date().toISOString().slice(0, 16) + "Z",
+  ...(flag("family") ? { family: flag("family") } : {}),
+  ...(flag("action") ? { action: flag("action") } : {}),
+});
+console.log(`OK ${incidentId} handled: ${icm.buildHandledMark(mark)}`);

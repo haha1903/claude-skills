@@ -62,9 +62,22 @@ Step 2 uses the approval system as the source of truth rather than scanning ADO
 pipeline timelines, so the comparison build cannot drift from what reviewers
 actually let through. BET, Lionrock and Ev2Extensions share one serviceId because
 they are one service: BET is part of Lionrock, which is also why one lease and one
-title prefix legitimately cover all three. A request does not record which pipeline
-it came from, so the approved requests are walked newest-first until one is found
-whose build number exists in this pipeline's runs.
+title prefix legitimately cover all three. A request has no definitionId field of
+its own, so the approved requests are walked newest-first and attributed by the
+`definitionId` inside each one's `ado.build` answer
+(`abh.parseBuildHealthLink`), which is the only place a request records the
+pipeline it deployed.
+
+**Do not attribute a request by its build number.** Build numbers are unique per
+pipeline, not per service, so they collide across pipelines sharing a serviceId.
+BET's 15.3831 shipped `20260827.1` and Lionrock independently produced a
+`20260827.1` of its own, as a canceled run: resolving Lionrock's previous release
+by number picked BET's request and set the comparison build to a run that never
+deployed. Nothing about that failure is visible in the output, because the wrong
+answer is a plausible one, and every downstream value (the ABH title and
+description, and the fallback warning) is quietly computed from it. The link also
+carries the build id directly, so the comparison build no longer has to appear in
+this pipeline's bounded page of recent runs.
 
 Step 3 usually finds the regions on the build itself but not the service group. A
 build parked at its Approval gate has not run its EV2 deploy task yet, and the

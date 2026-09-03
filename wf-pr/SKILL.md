@@ -15,6 +15,17 @@ get "you need to run the login command", the environment's az is logged into
 the wrong tenant or hasn't done devops login. This is an environment setup
 issue, not a skill bug — surface it, don't work around it.
 
+**ADO rate limit (HTTP 429).** `wf-pr create` needs the branch pushed first; a
+`git push` (or this skill's ADO REST calls) can return **429
+`RequestBlockedException` / `exceeding usage of resource 'DBCPU'`**. That's ADO
+throttling your identity by TSTU consumption (bucket `TFS/Short`), NOT an auth or
+code failure. **Do not loop-retry** — retries keep the quota at 0 and prolong the
+block. Honor the **`Retry-After`** header (seconds): wait it out once, then a
+single retry. It self-heals after ~5 min of no git activity. Persisting? surface
+it and leave the commit unpushed (it's safe on the local branch) rather than
+hammering. Details + how to read the headers:
+`~/Projects/s360-docs/s360/ado-rate-limit-429.md`.
+
 ## Commands
 
 Create a PR from the current branch:

@@ -290,9 +290,19 @@ log(`build    : ${buildNumber ?? "?"} (id ${buildId})`);
 // ------------------------------------------- 2. previous shipped build from SafeFly
 
 // Several pipelines share one serviceId (BET, Lionrock and Ev2Extensions all sit
-// under Azure Build Out Automation), and a request does not record which pipeline
-// it came from. So walk the approved requests newest-first and keep the first one
-// whose build number exists in THIS pipeline's runs.
+// under Azure Build Out Automation), and a request carries no definitionId field of
+// its own. Its `ado.build` answer does, though, so that link is what attributes a
+// request to a pipeline.
+//
+// Matching on the build *number* instead is not merely weaker, it is wrong: build
+// numbers are unique per pipeline, not per service. BET's 15.3831 shipped
+// "20260827.1" and Lionrock independently produced a "20260827.1" of its own (a
+// canceled run), so a number-keyed lookup picked BET's request as Lionrock's
+// previous release and handed ABH a diff against a build that never deployed.
+//
+// The link also carries the build id directly, which removes the second dependency
+// on that lookup: the comparison build no longer has to appear in this pipeline's
+// bounded page of recent runs.
 //
 // The build being deployed is excluded: re-releasing a build that already shipped
 // is allowed, but ABH cannot diff a build against itself and returns no summary.
@@ -305,29 +315,70 @@ const history = await safefly.listRequests({
 const approved = history.data.filter(
   (r) => (r.currentState ?? "").toLowerCase() === "approved" && r.buildVersion,
 );
-const prev = approved.find(
-  (r) => runByNum.has(r.buildVersion) && String(runByNum.get(r.buildVersion).id) !== String(buildId),
-);
+
+// Attribution needs the full request, so resolve lazily newest-first and stop at
+// the first hit rather than fetching all of them.
+const SCAN_LIMIT = 15;
+const scanned = approved.slice(0, SCAN_LIMIT);
+let prev;
+let payloadBuildId;
+const skipped = [];
+for (const r of scanned) {
+  let ref;
+  try {
+    const full = await safefly.getRequest(r.id);
+    ref = abh.parseBuildHealthLink(safefly.answersByName(full)["ado.build"]);
+  } catch (e) {
+    skipped.push(`${r.displayId}=${r.buildVersion} (unreadable: ${String(e.message ?? e).slice(0, 60)})`);
+    continue;
+  }
+  if (!ref?.definitionId) {
+    // No attributable link (ado.build_na, or a shape change). Guessing here is what
+    // caused the bug this loop replaces, so skip it and say so.
+    skipped.push(`${r.displayId}=${r.buildVersion} (no definitionId in ado.build)`);
+    continue;
+  }
+  if (String(ref.definitionId) !== String(pipeline.definitionId)) {
+    skipped.push(`${r.displayId}=${r.buildVersion} (definition ${ref.definitionId})`);
+    continue;
+  }
+  if (!ref.buildId) {
+    skipped.push(`${r.displayId}=${r.buildVersion} (no buildId in ado.build)`);
+    continue;
+  }
+  if (String(ref.buildId) === String(buildId)) {
+    skipped.push(`${r.displayId}=${r.buildVersion} (this same build)`);
+    continue;
+  }
+  prev = r;
+  payloadBuildId = ref.buildId;
+  break;
+}
 
 if (!prev) {
-  const self = approved.filter((r) => String(runByNum.get(r.buildVersion)?.id) === String(buildId));
-  const seen = approved.slice(0, 6).map((r) => `${r.displayId}=${r.buildVersion}`).join(", ");
   die(
-    `no approved request found whose build belongs to ${pipeline.name} and differs from ${buildNumber ?? buildId}`,
-    `${approved.length} approved requests exist for ${pipeline.serviceName}.\n` +
-      (self.length
-        ? `${self.map((r) => r.displayId).join(", ")} already shipped this exact build, and ABH\n` +
-          `cannot diff a build against itself. Pick a different build, or wait for a newer one.\n`
-        : `None of their builds are in this pipeline's last 200 runs -- several pipelines\n` +
-          `share this service, so the history is mixed.\n`) +
-      (seen ? `  recent: ${seen}\n` : "") +
+    `no approved request found whose build belongs to ${pipeline.name} (definition ${pipeline.definitionId}) and differs from ${buildNumber ?? buildId}`,
+    `${approved.length} approved requests exist for ${pipeline.serviceName}; ` +
+      `checked the newest ${scanned.length}.\n` +
+      `A request is attributed by the definitionId in its ado.build answer, because\n` +
+      `several pipelines share this service and build numbers collide across them.\n` +
+      (skipped.length ? `  skipped: ${skipped.slice(0, 8).join("\n           ")}\n` : "") +
       `\nIf this pipeline has never shipped through SafeFly V2, create the first request\n` +
       `in the portal; ABH needs a previous build to diff against.`,
   );
 }
-const payloadBuildId = runByNum.get(prev.buildVersion).id;
+if (skipped.length) log(`skipped  : ${skipped.length} request(s) not from this pipeline (${skipped[0]}${skipped.length > 1 ? ", ..." : ""})`);
 log(`previous : ${prev.buildVersion} (request ${prev.displayId})`);
 log(`compare  : ${prev.buildVersion} (id ${payloadBuildId})`);
+
+// The number recorded on the request should name the same run the link points at.
+// A mismatch means one of the two is stale, and the diff would be misattributed.
+const prevRun = runByNum.get(prev.buildVersion);
+if (prevRun && String(prevRun.id) !== String(payloadBuildId)) {
+  log(`warn     : ${prev.displayId} records build ${prev.buildVersion}, which in this`);
+  log(`warn     : pipeline is id ${prevRun.id}, but its ado.build link points at ${payloadBuildId}.`);
+  log(`warn     : using the link, since that is what the request actually deployed.`);
+}
 
 // ------------------------------------------------------------------ 3. ABH data
 

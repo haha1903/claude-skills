@@ -5,8 +5,8 @@ description: Create an Azure DevOps work item from a git diff for tasks-gateway 
 
 # wf-wi
 
-Non-interactive work-item creation for workflow tasks. Uses the shared `msapi`
-library (`msapi.boards` for work items, `msapi.aigen` for AI generation) so
+Non-interactive work-item creation for workflow tasks. Uses the iris SDK
+(`boards` for work items, `aigen` for AI generation, via `_iris-shared`) so
 cpr's AI-generation logic is reused without any prompt-for-confirmation step.
 
 ## Prerequisite
@@ -14,12 +14,13 @@ cpr's AI-generation logic is reused without any prompt-for-confirmation step.
 - `az` authenticated for Azure DevOps on dev.azure.com/msazure (same as wf-pr).
 - Run from inside the worktree of the BET repo (or any repo whose changes
   define the diff). The skill reads `git diff <target>..HEAD` to feed the AI.
-- `msapi` importable (pip-installed in the container; `pip install -e ~/Projects/msapi` locally).
+- iris available (auto-built on first `_iris-shared` import; `IRIS_ROOT` in the
+  container, `~/Projects/iris` locally).
 
 ## Command
 
 ```
-bin/wi.py create-from-diff [--target master] [--type pbi|bug] [--parent <feature-key-or-id>] [--title T] [--description D]
+bin/wi.mjs create-from-diff [--target master] [--type pbi|bug] [--parent <feature-key-or-id>] [--title T] [--description D]
 ```
 Defaults: target = repo's default branch; type/parent/title/description AI-generated.
 
@@ -33,14 +34,14 @@ Exit 0 on success; non-zero on AI failure / az failure / no diff.
 
 1. `git diff <target>..HEAD` (subject to a 1500-line cap; falls back to a stat
    summary when too large) feeds the AI prompt.
-2. `generate_with_ai(diff, AI_PROMPT, FeatureMap)` returns
+2. `aigen.generateWithAi(diff, AI_PROMPT, featureMap.keysString())` returns
    `{type, parent, title, description, completedwork}` JSON.
-3. `parse_ai_response` -> sanity check; CLI flags override AI fields.
-4. `get_parent_info(parent)` resolves parent id + area path + parent type.
-5. `create_work_item(title, type, iteration, parent_id, area_path, description)`
-   creates the item via `az boards work-item create`.
-6. `set_completed_work(id, completedwork)` sets the estimate.
-7. `update_state(id, "In Review")` advances state (matches cpr behavior).
+3. `aigen.parseAiResponse` -> sanity check; CLI flags override AI fields.
+4. `boards.getParentInfo(parent, featureMap)` resolves parent id + area + type.
+5. `boards.createWorkItem({title, wiType, iteration, parentId, areaPath, description})`
+   creates the item via the ADO REST API (Markdown description).
+6. `boards.setCompletedWork(id, completedwork)` sets the estimate.
+7. `boards.updateState(id, "In Review")` advances state (matches cpr behavior).
 
 Returns the new id on stdout. The caller (playbook) feeds it to
 `wf-pr create --work-items <id>`.

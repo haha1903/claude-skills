@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
- * Assign an IcM incident to an individual (thin wrapper over iris icm.assign).
- * WRITE OP.
+ * Assign an IcM incident to an individual AND acknowledge it as that person. WRITE OP.
  *
- * Sets OwningContactAlias via OData PATCH — the only way to set a person-level
- * owner via API (there is no AssignIncident action). Verifies with a GET.
+ * Goes through iris icm.assignMany rather than icm.assign, because the bare assign only
+ * PATCHes OwningContactAlias and leaves the incident unacknowledged -- which keeps it
+ * paging and still reading as untriaged. A pass using the bare form left 37 of 145
+ * incidents in that state while reporting success.
  *
- *   icm-assign <ID> <alias>      # assign to a person
- *   icm-assign <ID> ""           # unassign
+ * Acknowledging is what sets the owner anyway (AcknowledgeIncident writes
+ * OwningContactAlias to whatever alias it is given), so one call covers both states.
+ *
+ *   icm-assign <ID> <alias>      # assign + acknowledge as that person
+ *   icm-assign <ID> ""           # unassign (no ack: there is nobody to ack as)
  */
 import { icm } from "../../_iris-shared/index.mjs";
 
@@ -15,12 +19,11 @@ const argv = process.argv.slice(2);
 if (argv.length < 2) { console.error('usage: icm-assign ID ALIAS   (ALIAS="" to unassign)'); process.exit(2); }
 const [incidentId, alias] = argv;
 
-await icm.assign(incidentId, alias);
-const got = await icm.getIncident(incidentId);
-const owner = got && typeof got === "object" ? got.OwningContactAlias ?? null : null;
-if (owner === (alias || null)) {
-  console.log(`OK ${incidentId} -> ${JSON.stringify(owner)}`);
-} else {
-  console.error(`WARN ${incidentId}: expected ${JSON.stringify(alias)} but got ${JSON.stringify(owner)}`);
+const res = await icm.assignMany({ [incidentId]: alias });
+if (res.failed.length) {
+  console.error(`FAILED ${incidentId}: ${res.failed[0]?.error ?? "unknown"}`);
   process.exit(1);
 }
+const got = await icm.getIncident(incidentId);
+const owner = got?.OwningContactAlias ?? null;
+console.log(`OK ${incidentId} -> ${JSON.stringify(owner)}${alias ? ` (acknowledged: ${icm.isAcked(got)})` : ""}`);

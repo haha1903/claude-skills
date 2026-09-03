@@ -13,7 +13,10 @@ import os from "node:os";
 import path from "node:path";
 import { icm } from "../../_iris-shared/index.mjs";
 
-const ME = os.userInfo().username;
+// Same trap as icm-mitigate: os.userInfo() throws under a bare numeric uid, which is how
+// the container runs. ICM_ALIAS is set there for exactly this.
+const ME = process.env.ICM_ALIAS
+  || (() => { try { return os.userInfo().username; } catch { return ""; } })();
 const TEAM_ID = 67250; // Region Access & Quota
 const DAYS = 31;
 const STATE_FILE = path.join(os.homedir(), ".pi/gateway/oncall-state.json");

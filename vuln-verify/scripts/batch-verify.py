@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Iterable
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-FETCH = SCRIPT_DIR / "fetch-vulns.py"
+FETCH = SCRIPT_DIR / "fetch-vulns.mjs"
 EXTRACTOR_LOCAL = SCRIPT_DIR / "_extract-all-deps.py"
 
 # Pod bootstrap

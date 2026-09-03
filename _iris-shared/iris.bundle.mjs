@@ -13041,8 +13041,8 @@ var init_LoopbackClient = __esm({
        * Handles POST requests for form_post response mode
        */
       handlePostRequest(req, res, resolve2, successTemplate, errorTemplate) {
-        const contentType = req.headers["content-type"]?.split(";")[0]?.trim();
-        if (contentType !== "application/x-www-form-urlencoded") {
+        const contentType2 = req.headers["content-type"]?.split(";")[0]?.trim();
+        if (contentType2 !== "application/x-www-form-urlencoded") {
           res.writeHead(415);
           res.end("Unsupported Media Type");
           return;
@@ -31779,9 +31779,9 @@ var require_pkcs7 = __commonJS({
         error2.errors = errors;
         throw error2;
       }
-      var contentType = asn1.derToOid(capture.contentType);
+      var contentType2 = asn1.derToOid(capture.contentType);
       var msg;
-      switch (contentType) {
+      switch (contentType2) {
         case forge2.pki.oids.envelopedData:
           msg = p7.createEnvelopedData();
           break;
@@ -31792,7 +31792,7 @@ var require_pkcs7 = __commonJS({
           msg = p7.createSignedData();
           break;
         default:
-          throw new Error("Cannot read PKCS#7 message. ContentType with OID " + contentType + " is not (yet) supported.");
+          throw new Error("Cannot read PKCS#7 message. ContentType with OID " + contentType2 + " is not (yet) supported.");
       }
       msg.fromAsn1(capture.content.value[0]);
       return msg;
@@ -31963,12 +31963,12 @@ var require_pkcs7 = __commonJS({
           }
           var authenticatedAttributes = signer.authenticatedAttributes || [];
           if (authenticatedAttributes.length > 0) {
-            var contentType = false;
+            var contentType2 = false;
             var messageDigest = false;
             for (var i = 0; i < authenticatedAttributes.length; ++i) {
               var attr = authenticatedAttributes[i];
-              if (!contentType && attr.type === forge2.pki.oids.contentType) {
-                contentType = true;
+              if (!contentType2 && attr.type === forge2.pki.oids.contentType) {
+                contentType2 = true;
                 if (messageDigest) {
                   break;
                 }
@@ -31976,13 +31976,13 @@ var require_pkcs7 = __commonJS({
               }
               if (!messageDigest && attr.type === forge2.pki.oids.messageDigest) {
                 messageDigest = true;
-                if (contentType) {
+                if (contentType2) {
                   break;
                 }
                 continue;
               }
             }
-            if (!contentType || !messageDigest) {
+            if (!contentType2 || !messageDigest) {
               throw new Error("Invalid signer.authenticatedAttributes. If signer.authenticatedAttributes is specified, then it must contain at least two attributes, PKCS #9 content-type and PKCS #9 message-digest.");
             }
           }
@@ -32120,7 +32120,7 @@ var require_pkcs7 = __commonJS({
             "Could not sign PKCS#7 message; there is no content to sign."
           );
         }
-        var contentType = asn1.derToOid(msg.contentInfo.value[0].value);
+        var contentType2 = asn1.derToOid(msg.contentInfo.value[0].value);
         var bytes = asn1.toDer(content);
         bytes.getByte();
         asn1.getBerValueLength(bytes);
@@ -32132,7 +32132,7 @@ var require_pkcs7 = __commonJS({
         for (var i = 0; i < msg.signers.length; ++i) {
           var signer = msg.signers[i];
           if (signer.authenticatedAttributes.length === 0) {
-            if (contentType !== forge2.pki.oids.data) {
+            if (contentType2 !== forge2.pki.oids.data) {
               throw new Error(
                 "Invalid signer; authenticatedAttributes must be present when the ContentInfo content type is not PKCS#7 Data."
               );
@@ -32655,8 +32655,8 @@ var require_pkcs7 = __commonJS({
         error2.errors = error2;
         throw error2;
       }
-      var contentType = asn1.derToOid(capture.contentType);
-      if (contentType !== forge2.pki.oids.data) {
+      var contentType2 = asn1.derToOid(capture.contentType);
+      if (contentType2 !== forge2.pki.oids.data) {
         throw new Error("Unsupported PKCS#7 message. Only wrapped ContentType Data supported.");
       }
       if (capture.encryptedContent) {
@@ -51218,6 +51218,110 @@ var require_dist2 = __commonJS({
   }
 });
 
+// node_modules/content-type/index.js
+var require_content_type = __commonJS({
+  "node_modules/content-type/index.js"(exports) {
+    "use strict";
+    var PARAM_REGEXP = /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g;
+    var TEXT_REGEXP = /^[\u000b\u0020-\u007e\u0080-\u00ff]+$/;
+    var TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    var QESC_REGEXP = /\\([\u000b\u0020-\u00ff])/g;
+    var QUOTE_REGEXP = /([\\"])/g;
+    var TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+    exports.format = format;
+    exports.parse = parse3;
+    function format(obj) {
+      if (!obj || typeof obj !== "object") {
+        throw new TypeError("argument obj is required");
+      }
+      var parameters = obj.parameters;
+      var type = obj.type;
+      if (!type || !TYPE_REGEXP.test(type)) {
+        throw new TypeError("invalid type");
+      }
+      var string4 = type;
+      if (parameters && typeof parameters === "object") {
+        var param;
+        var params = Object.keys(parameters).sort();
+        for (var i = 0; i < params.length; i++) {
+          param = params[i];
+          if (!TOKEN_REGEXP.test(param)) {
+            throw new TypeError("invalid parameter name");
+          }
+          string4 += "; " + param + "=" + qstring(parameters[param]);
+        }
+      }
+      return string4;
+    }
+    function parse3(string4) {
+      if (!string4) {
+        throw new TypeError("argument string is required");
+      }
+      var header = typeof string4 === "object" ? getcontenttype(string4) : string4;
+      if (typeof header !== "string") {
+        throw new TypeError("argument string is required to be a string");
+      }
+      var index = header.indexOf(";");
+      var type = index !== -1 ? header.slice(0, index).trim() : header.trim();
+      if (!TYPE_REGEXP.test(type)) {
+        throw new TypeError("invalid media type");
+      }
+      var obj = new ContentType(type.toLowerCase());
+      if (index !== -1) {
+        var key;
+        var match;
+        var value;
+        PARAM_REGEXP.lastIndex = index;
+        while (match = PARAM_REGEXP.exec(header)) {
+          if (match.index !== index) {
+            throw new TypeError("invalid parameter format");
+          }
+          index += match[0].length;
+          key = match[1].toLowerCase();
+          value = match[2];
+          if (value.charCodeAt(0) === 34) {
+            value = value.slice(1, -1);
+            if (value.indexOf("\\") !== -1) {
+              value = value.replace(QESC_REGEXP, "$1");
+            }
+          }
+          obj.parameters[key] = value;
+        }
+        if (index !== header.length) {
+          throw new TypeError("invalid parameter format");
+        }
+      }
+      return obj;
+    }
+    function getcontenttype(obj) {
+      var header;
+      if (typeof obj.getHeader === "function") {
+        header = obj.getHeader("content-type");
+      } else if (typeof obj.headers === "object") {
+        header = obj.headers && obj.headers["content-type"];
+      }
+      if (typeof header !== "string") {
+        throw new TypeError("content-type header is missing from object");
+      }
+      return header;
+    }
+    function qstring(val) {
+      var str = String(val);
+      if (TOKEN_REGEXP.test(str)) {
+        return str;
+      }
+      if (str.length > 0 && !TEXT_REGEXP.test(str)) {
+        throw new TypeError("invalid parameter value");
+      }
+      return '"' + str.replace(QUOTE_REGEXP, "\\$1") + '"';
+    }
+    function ContentType(type) {
+      this.parameters = /* @__PURE__ */ Object.create(null);
+      this.type = type;
+    }
+  }
+});
+
 // node_modules/yaml/dist/nodes/identity.js
 var require_identity = __commonJS({
   "node_modules/yaml/dist/nodes/identity.js"(exports) {
@@ -66897,16 +67001,7 @@ var Client = class extends Protocol {
     if (!methodSchema) {
       throw new Error("Schema is missing a method literal");
     }
-    let methodValue;
-    if (isZ4Schema(methodSchema)) {
-      const v4Schema = methodSchema;
-      const v4Def = v4Schema._zod?.def;
-      methodValue = v4Def?.value ?? v4Schema.value;
-    } else {
-      const v3Schema = methodSchema;
-      const legacyDef = v3Schema._def;
-      methodValue = legacyDef?.value ?? v3Schema.value;
-    }
+    const methodValue = getLiteralValue(methodSchema);
     if (typeof methodValue !== "string") {
       throw new Error("Schema method literal must be a string");
     }
@@ -67296,6 +67391,23 @@ var Client = class extends Protocol {
     return this.notification({ method: "notifications/roots/list_changed" });
   }
 };
+
+// node_modules/@modelcontextprotocol/sdk/dist/esm/shared/mediaType.js
+var import_content_type = __toESM(require_content_type(), 1);
+function mediaTypeEssence(header) {
+  if (!header) {
+    return void 0;
+  }
+  try {
+    return import_content_type.default.parse(header).type;
+  } catch {
+    const essence = (header.split(";", 1)[0] ?? "").trim().toLowerCase();
+    if (essence === "" || header.slice(essence.length).includes(",")) {
+      return void 0;
+    }
+    return essence;
+  }
+}
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/transport.js
 function normalizeHeaders(headers) {
@@ -68672,11 +68784,12 @@ var StreamableHTTPClientTransport = class {
       }
       const messages = Array.isArray(message) ? message : [message];
       const hasRequests = messages.filter((msg) => "method" in msg && "id" in msg && msg.id !== void 0).length > 0;
-      const contentType = response.headers.get("content-type");
+      const contentType2 = response.headers.get("content-type");
+      const responseMediaType = mediaTypeEssence(contentType2);
       if (hasRequests) {
-        if (contentType?.includes("text/event-stream")) {
+        if (responseMediaType === "text/event-stream") {
           this._handleSseStream(response.body, { onresumptiontoken }, false);
-        } else if (contentType?.includes("application/json")) {
+        } else if (responseMediaType === "application/json") {
           const data = await response.json();
           const responseMessages = Array.isArray(data) ? data.map((msg) => JSONRPCMessageSchema.parse(msg)) : [JSONRPCMessageSchema.parse(data)];
           for (const msg of responseMessages) {
@@ -68684,7 +68797,7 @@ var StreamableHTTPClientTransport = class {
           }
         } else {
           await response.body?.cancel();
-          throw new StreamableHTTPError(-1, `Unexpected content type: ${contentType}`);
+          throw new StreamableHTTPError(-1, `Unexpected content type: ${contentType2}`);
         }
       } else {
         await response.body?.cancel();
@@ -70029,7 +70142,12 @@ __export(icm_exports, {
   API2_INCIDENT_BASE: () => API2_INCIDENT_BASE,
   API2_METADATA_BASE: () => API2_METADATA_BASE,
   AWAITING_KEYWORD: () => AWAITING_KEYWORD,
+  CATEGORY_FIELD_ID: () => CATEGORY_FIELD_ID,
+  CATEGORY_FIELD_NAME: () => CATEGORY_FIELD_NAME,
+  HANDLED_FIELD_ID: () => HANDLED_FIELD_ID,
+  HANDLED_FIELD_NAME: () => HANDLED_FIELD_NAME,
   HANDLED_KEYWORD: () => HANDLED_KEYWORD,
+  INCIDENT_CATEGORIES: () => INCIDENT_CATEGORIES,
   NEXT_ACTION_TIME_FIELD_ID: () => NEXT_ACTION_TIME_FIELD_ID,
   ODATA_BASE: () => ODATA_BASE,
   ONCALL_ENDPOINT: () => ONCALL_ENDPOINT,
@@ -70052,6 +70170,7 @@ __export(icm_exports, {
   assignMany: () => assignMany,
   buildAckBody: () => buildAckBody,
   buildCommentEntry: () => buildCommentEntry,
+  buildHandledMark: () => buildHandledMark,
   buildKeywords: () => buildKeywords,
   buildMitigateBody: () => buildMitigateBody,
   buildPendingFilterApi2: () => buildPendingFilterApi2,
@@ -70059,24 +70178,30 @@ __export(icm_exports, {
   buildTags: () => buildTags,
   buildTransferBody: () => buildTransferBody,
   bulkRun: () => bulkRun,
+  categoryFromTitle: () => categoryFromTitle,
+  categoryOf: () => categoryOf,
   clearKeyword: () => clearKeyword,
   clearTag: () => clearTag,
   collectFieldIds: () => collectFieldIds,
   commentMany: () => commentMany,
   compileCriteria: () => compileCriteria,
   ensureFieldMeta: () => ensureFieldMeta,
+  excludeHandledClause: () => excludeHandledClause,
   expandDateToken: () => expandDateToken,
   fetchSavedQueryProperties: () => fetchSavedQueryProperties,
   getIncident: () => getIncident,
+  handledMarkOf: () => handledMarkOf,
   historicalOwners: () => historicalOwners,
   isAcked: () => isAcked,
   isDaytimeSlot: () => isDaytimeSlot,
+  isOncallOnDay: () => isOncallOnDay,
   isUrgent: () => isUrgent,
   listByFilter: () => listByFilter,
   listByOwner: () => listByOwner,
   listBySavedQuery: () => listBySavedQuery,
   listSharedQueries: () => listSharedQueries,
   localMidnightUtc: () => localMidnightUtc,
+  markHandled: () => markHandled,
   mergeWindows: () => mergeWindows,
   mitigate: () => mitigate,
   odata: () => odata,
@@ -70086,6 +70211,7 @@ __export(icm_exports, {
   oncallWeekStart: () => oncallWeekStart,
   oncallWindows: () => oncallWindows,
   parseFieldMeta: () => parseFieldMeta,
+  parseHandledMark: () => parseHandledMark,
   parseODataResponse: () => parseODataResponse,
   parseOncall: () => parseOncall,
   parseOncallRoster: () => parseOncallRoster,
@@ -70103,6 +70229,7 @@ __export(icm_exports, {
   resolveOwner: () => resolveOwner,
   resolveSavedQuery: () => resolveSavedQuery,
   savedQueryIncidents: () => savedQueryIncidents,
+  setCategory: () => setCategory,
   sharedQueryIncidents: () => sharedQueryIncidents,
   teamLeaf: () => teamLeaf,
   teamsById: () => teamsById,
@@ -70286,6 +70413,103 @@ async function addKeyword(id, kw = HANDLED_KEYWORD, timeout = 60) {
   const got = await getIncident(id, timeout);
   const existing = got && typeof got === "object" ? got.Keywords : "";
   return update(id, { Keywords: buildKeywords(existing, kw) }, timeout);
+}
+var HANDLED_FIELD_ID = 51090;
+var HANDLED_FIELD_NAME = "Lionrock_Bot";
+var HANDLED_FIELD_TYPE = "BigString";
+function buildHandledMark(mark) {
+  const parts = [`handled=${mark.handled}`];
+  if (mark.family) parts.push(`family=${mark.family.replace(/\s+/g, "_")}`);
+  if (mark.action) parts.push(`action=${mark.action.replace(/\s+/g, "_")}`);
+  if (mark.category) parts.push(`category=${mark.category.replace(/\s+/g, "_")}`);
+  const known = /* @__PURE__ */ new Set(["handled", "family", "action", "category"]);
+  for (const [k, v] of Object.entries(mark)) {
+    if (known.has(k) || !v) continue;
+    parts.push(`${k}=${String(v).replace(/\s+/g, "_")}`);
+  }
+  return parts.join(" ");
+}
+function parseHandledMark(value) {
+  const s = String(value ?? "").trim();
+  if (!s) return null;
+  const out = {};
+  for (const tok of s.split(/\s+/)) {
+    const eq = tok.indexOf("=");
+    if (eq > 0) out[tok.slice(0, eq)] = tok.slice(eq + 1);
+  }
+  if (!out.handled) return null;
+  const { handled, ...rest } = out;
+  return { handled, ...rest };
+}
+function handledMarkOf(incident) {
+  if (!incident || typeof incident !== "object") return null;
+  const rec = incident;
+  const groups = rec.CustomFieldGroups;
+  for (const g of groups ?? []) {
+    for (const f of g.CustomFields ?? []) {
+      if (f.Name === HANDLED_FIELD_NAME) return parseHandledMark(f.Value);
+    }
+  }
+  const flat = rec.CustomFields;
+  for (const f of flat ?? []) {
+    if (Number(f.CustomFieldId) === HANDLED_FIELD_ID) {
+      return parseHandledMark(f.StringValue ?? f.Value);
+    }
+  }
+  return null;
+}
+async function markHandled(id, mark, timeout = 60) {
+  const got = await getIncident(id, timeout);
+  const groups = got?.CustomFieldGroups ?? [];
+  const group = groups.find((g) => (g.CustomFields ?? []).some((f) => f.Name === HANDLED_FIELD_NAME));
+  if (!group) {
+    throw new Error(
+      `${HANDLED_FIELD_NAME} is not present on incident ${id}. A newly created custom field takes time to appear; check the portal and retry.`
+    );
+  }
+  const value = buildHandledMark(mark);
+  await odata("PATCH", `incidents(${id})`, {
+    CustomFieldGroups: [{
+      PublicId: group.PublicId,
+      ContainerId: String(group.ContainerId),
+      GroupType: group.GroupType,
+      CustomFields: [{
+        Name: HANDLED_FIELD_NAME,
+        DisplayName: HANDLED_FIELD_NAME,
+        Value: value,
+        Type: HANDLED_FIELD_TYPE
+      }]
+    }]
+  }, timeout);
+  let after = handledMarkOf(await getIncident(id, timeout));
+  if (!after) throw new Error(`marked ${id} but the value did not stick (read back empty)`);
+  const lost = (want, got2) => Boolean(want) && !got2;
+  if (lost(mark.family, after.family) || lost(mark.action, after.action) || lost(mark.category, after.category)) {
+    await odata("PATCH", `incidents(${id})`, {
+      CustomFieldGroups: [{
+        PublicId: group.PublicId,
+        ContainerId: String(group.ContainerId),
+        GroupType: group.GroupType,
+        CustomFields: [{
+          Name: HANDLED_FIELD_NAME,
+          DisplayName: HANDLED_FIELD_NAME,
+          Value: value,
+          Type: HANDLED_FIELD_TYPE
+        }]
+      }]
+    }, timeout);
+    after = handledMarkOf(await getIncident(id, timeout));
+    if (!after) throw new Error(`marked ${id} but the value did not stick on retry`);
+    if (lost(mark.family, after.family) || lost(mark.action, after.action) || lost(mark.category, after.category)) {
+      throw new Error(
+        `marked ${id} but the value was truncated twice: wrote ${JSON.stringify(value)}, read back ${JSON.stringify(buildHandledMark(after))}`
+      );
+    }
+  }
+  return after;
+}
+function excludeHandledClause() {
+  return `not CustomFields/any(a: a/CustomFieldId eq ${HANDLED_FIELD_ID} and a/StringValue ne null)`;
 }
 function removeKeyword(existing, kw) {
   return String(existing ?? "").split(";").map((s) => s.trim()).filter(Boolean).filter((k) => k !== kw).join(";");
@@ -70553,6 +70777,12 @@ function titleSignature(title) {
       if (head2) return { key: head2, search: pipes[0] };
     }
   }
+  const twoBrackets = /^\[([^\]]+)\]\[([^\]]+)\]/.exec(t);
+  if (twoBrackets) {
+    const resource = twoBrackets[1].replace(/\s+\w*erifica\w*$/i, "").replace(/-[A-Za-z0-9_]+$/, "").trim();
+    const error2 = twoBrackets[2].trim();
+    if (resource && error2) return { key: `${resource} ${error2}`, search: error2 };
+  }
   const volatileToken = /[0-9a-f]{8}-[0-9a-f]{4}-|\d{1,2}\/\d{1,2}\/\d{4}|\d{4,}/i.exec(t);
   let head = volatileToken ? t.slice(0, volatileToken.index) : t;
   head = head.replace(/[-\s|:,.]+$/, "");
@@ -70641,7 +70871,7 @@ var PENDING_FOLDER = "Pending Action";
 var PENDING_NAME_PREFIX = "Pending Action - ";
 var PENDING_ALL_NAME = "Pending Action - All";
 function excludeHandled(filter, handled = HANDLED_KEYWORD) {
-  const clause = `not contains(Keywords, '${handled}')`;
+  const clause = `not contains(Keywords, '${handled}') and ${excludeHandledClause()}`;
   return filter ? `${filter} and ${clause}` : clause;
 }
 function annotateOncallState(incidents, awaitingKeyword = AWAITING_KEYWORD) {
@@ -71140,6 +71370,122 @@ function resolveMany(incidentIds, o = {}, workers = 8) {
     }
   }, incidentIds, workers);
 }
+var INCIDENT_CATEGORIES = [
+  "BuildoutAutomation",
+  "LionrockRuntime",
+  "CisProvisioning",
+  "PlannedQuotaFrp",
+  "SovereignMirror",
+  "NewRegionBuildout",
+  "Ev2Readiness",
+  "DependencyGate",
+  "Ev2Rollout",
+  "QuotaGovernance",
+  "Other"
+];
+function categoryFromTitle(title) {
+  const t = String(title ?? "");
+  if (/^\s*\[WABO\]/.test(t)) return "BuildoutAutomation";
+  if (/^\s*\[CIS\]/.test(t)) return "CisProvisioning";
+  if (/^\s*\[Region Access\]/.test(t)) return "LionrockRuntime";
+  if (/^\s*\[(PlannedQuota|FRP)\b/.test(t)) return "PlannedQuotaFrp";
+  if (/^\s*US(Sec|Nat) HS IcM/.test(t)) return "SovereignMirror";
+  if (/^\s*(Physical )?NewRegion Buildout/.test(t)) return "NewRegionBuildout";
+  if (/^\s*Rollout '/.test(t)) return "Ev2Rollout";
+  if (/^\s*All Quota Plan Approval/.test(t)) return "QuotaGovernance";
+  if (/does not have an InternallyReady event/i.test(t)) return "Ev2Readiness";
+  if (/Unsatisfied Dependency/i.test(t)) return "DependencyGate";
+  return "Other";
+}
+var CATEGORY_FIELD_NAME = "Lionrock_Category";
+var CATEGORY_FIELD_ID = 51231;
+async function setCategory(id, category, timeout = 60) {
+  const got = await getIncident(id, timeout);
+  const groups = got?.CustomFieldGroups ?? [];
+  const group = groups.find((g) => (g.CustomFields ?? []).some((f) => f.Name === CATEGORY_FIELD_NAME));
+  if (!group) {
+    throw new Error(
+      `${CATEGORY_FIELD_NAME} is not present on incident ${id}. A newly created custom field takes time to appear on incidents; check the portal and retry.`
+    );
+  }
+  await odata("PATCH", `incidents(${id})`, {
+    CustomFieldGroups: [{
+      PublicId: group.PublicId,
+      ContainerId: String(group.ContainerId),
+      GroupType: group.GroupType,
+      CustomFields: [{
+        Name: CATEGORY_FIELD_NAME,
+        DisplayName: CATEGORY_FIELD_NAME,
+        Value: category,
+        Type: "Enum"
+      }]
+    }]
+  }, timeout);
+  const after = categoryOf(await getIncident(id, timeout));
+  if (after !== category) {
+    throw new Error(
+      `wrote ${category} to ${id} but it reads back as ${JSON.stringify(after)} -- an Enum rejects an undefined value without erroring`
+    );
+  }
+  return category;
+}
+function categoryOf(incident) {
+  if (!incident || typeof incident !== "object") return null;
+  const rec = incident;
+  const pick2 = (v) => {
+    const s = String(v ?? "").trim();
+    return INCIDENT_CATEGORIES.includes(s) ? s : null;
+  };
+  for (const g of rec.CustomFieldGroups ?? []) {
+    for (const f of g.CustomFields ?? []) {
+      if (f.Name === CATEGORY_FIELD_NAME) return pick2(f.Value);
+    }
+  }
+  for (const f of rec.CustomFields ?? []) {
+    if (f.Name === CATEGORY_FIELD_NAME) return pick2(f.EnumValue ?? f.StringValue ?? f.Value);
+  }
+  return null;
+}
+async function isOncallOnDay(teamId, alias, opts = {}) {
+  const fetch2 = opts.fetchWindows ?? oncallWindows;
+  const tz = opts.timeZone ?? "Australia/Sydney";
+  const at = opts.day ?? /* @__PURE__ */ new Date();
+  const day = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(at);
+  const from = new Date(at.getTime() - 2 * 864e5);
+  const to = new Date(at.getTime() + 2 * 864e5);
+  const r = await fetch2(teamId, alias, { start: from, end: to, timeout: opts.timeout ?? 240 });
+  const startOfDay = localDayStart(day, tz);
+  const endOfDay = new Date(startOfDay.getTime() + 864e5);
+  const windows = r.windows.filter((w) => {
+    const ws = new Date(w.start).getTime();
+    const we = new Date(w.end).getTime();
+    return ws < endOfDay.getTime() && we > startOfDay.getTime();
+  });
+  return { onCall: windows.length > 0, day, windows };
+}
+function localDayStart(day, timeZone) {
+  const [y, m, d] = day.split("-").map(Number);
+  const guess = Date.UTC(y, m - 1, d, 0, 0, 0);
+  const asLocal = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(new Date(guess));
+  const get = (t) => Number(asLocal.find((p) => p.type === t)?.value ?? 0);
+  const localMinutes = get("hour") * 60 + get("minute");
+  const sameDay = get("day") === d && get("month") === m && get("year") === y;
+  const shift = sameDay ? localMinutes : localMinutes - 1440;
+  return new Date(guess - shift * 6e4);
+}
 
 // src/ev2.ts
 var ev2_exports = {};
@@ -71242,7 +71588,7 @@ function readCertAuth(infra) {
   const key = infraKey(infra);
   const profile = { int: "Test", prod: "Prod" }[key];
   if (!profile) throw new Error(`unknown infra ${infra}`);
-  const cfgPath = path8.join(os8.homedir(), ".ev2", "config.yaml");
+  const cfgPath = process.env.EV2_CONFIG ?? path8.join(os8.homedir(), ".ev2", "config.yaml");
   const cfg = (0, import_yaml.parse)(fs13.readFileSync(cfgPath, "utf-8"));
   const c = cfg.configs[profile];
   if (!c) throw new Error(`no config profile ${profile} in ${cfgPath}`);
@@ -71304,6 +71650,7 @@ __export(ado_exports, {
   ORG: () => ORG2,
   PROJECT: () => PROJECT2,
   adoToken: () => adoToken,
+  approvalState: () => approvalState,
   buildByIdRest: () => buildByIdRest,
   discoverTenant: () => discoverTenant,
   extractEnvironments: () => extractEnvironments,
@@ -71322,6 +71669,7 @@ __export(ado_exports, {
   releaseStatus: () => releaseStatus,
   restText: () => restText,
   restTextRest: () => restTextRest,
+  stageResults: () => stageResults,
   timeline: () => timeline,
   timelineRest: () => timelineRest,
   withApiVersion: () => withApiVersion
@@ -71608,6 +71956,22 @@ async function timelineRest(buildId, opts = {}) {
   const org = opts.org ?? ORG2, project = opts.project ?? PROJECT2;
   const j = await restJson(`${org}/${project}/_apis/build/builds/${buildId}/timeline`, opts);
   return j.records ?? [];
+}
+function approvalState(records) {
+  const phases = (records ?? []).filter(
+    (r) => r.type === "Phase" && /^Approval(Service)?$/.test(String(r.name ?? ""))
+  );
+  if (!phases.length) return { state: "none" };
+  const waiting = phases.find((r) => r.state === "pending");
+  if (waiting) return { state: "pending", name: String(waiting.name ?? "") };
+  return { state: "passed", name: String(phases[0].name ?? "") };
+}
+function stageResults(records) {
+  return (records ?? []).filter((r) => r.type === "Stage").map((r) => ({
+    name: String(r.name ?? ""),
+    state: String(r.state ?? ""),
+    result: r.result == null ? null : String(r.result)
+  }));
 }
 async function logLinesRest(buildId, logId, opts = {}) {
   const org = opts.org ?? ORG2, project = opts.project ?? PROJECT2;
@@ -72703,6 +73067,7 @@ __export(abh_exports, {
   ev2Unit: () => ev2Unit,
   isOnboarded: () => isOnboarded,
   onboardingStatus: () => onboardingStatus,
+  parseBuildHealthLink: () => parseBuildHealthLink,
   releaseContext: () => releaseContext,
   releaseSummary: () => releaseSummary
 });
@@ -72777,6 +73142,26 @@ function buildHealthLink(o) {
     payloadBuildId: String(o.payloadBuildId)
   });
   return `https://${org}.visualstudio.com/One/_apps/buildhealth?${q.toString()}`;
+}
+function parseBuildHealthLink(link) {
+  if (!link) return void 0;
+  let q;
+  try {
+    const u = new URL(link.trim());
+    if (!/\/buildhealth$/i.test(u.pathname)) return void 0;
+    q = u.searchParams;
+  } catch {
+    return void 0;
+  }
+  const pick2 = (k) => q.get(k) ?? void 0;
+  const out = {
+    buildId: pick2("buildId"),
+    definitionId: pick2("definitionId"),
+    serviceId: pick2("serviceId"),
+    releaseId: pick2("releaseId"),
+    payloadBuildId: pick2("payloadBuildId")
+  };
+  return Object.values(out).some(Boolean) ? out : void 0;
 }
 
 // src/webjobs.ts
@@ -73220,4 +73605,11 @@ export {
 
 safe-buffer/index.js:
   (*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> *)
+
+content-type/index.js:
+  (*!
+   * content-type
+   * Copyright(c) 2015 Douglas Christopher Wilson
+   * MIT Licensed
+   *)
 */

@@ -1,6 +1,7 @@
 ---
 name: oncall-brief
 description: Use when the user (on the Lionrock / Region Access & Quota on-call rotation) wants a daily on-call inspection brief — e.g. "oncall brief", "/oncall-brief", "collect today's on-call status". Walks the team's OneNote daily checklist, auto-collects every reachable source (IcM, ADO pipelines, Lionrock Geneva log, support mail/Teams), writes an English report to Obsidian + ~/Tasks/Scrum/, and after user review posts it to the team Teams meeting chat.
+summary: Both halves of the rotation in one daily report
 ---
 
 # OnCall Daily Brief
@@ -93,7 +94,6 @@ Legacy note (only if collect.mjs is unavailable): the raw per-source commands ar
 in `reference.md`. Prefer the collector.
 
 **Manual items the collector does NOT cover** (report under their checklist item):
-- item n — WebJobs status `lionrock-webjob-uat` (needs SAW) — user skips for now.
 - item l follow-up — CCO board query for failed Capacity Orders (link still TODO).
 
 The collector already records per-source failures in `errors` and never aborts;
@@ -101,75 +101,78 @@ surface any as "could not collect: <reason>" under the relevant item.
 
 ### 2. Generate the report (English)
 
-**Table-first, scannable layout.** The report is read at a live checkpoint, so it
-must be skimmable in seconds: use TABLES for anything with rows (metrics,
-pipelines, checklist, IcM lists) — not walls of bullets. Emit these sections in
-this exact order:
+**One report, skimmed on screen and read aloud at the checkpoint.** Not a table
+for looking at plus a separate summary for saying. This skill used to emit both,
+and that was the wrong shape twice over: it conceded the report itself could not
+be read, and it made two things to keep in sync.
 
-```
-# OnCall Daily Brief — YYYY-MM-DD
+Those two goals are the same goal, and **tables serve both** — they are the
+backbone. A short table is the easiest thing to skim, and it reads aloud fine
+because you say the cells, not the separators: "Queue, forty-one, all owned.
+Rolling Test, red, four days." What breaks aloud is not the table, it is what gets
+stuffed into it.
 
-## 📊 At a glance
-<A single 2-col table (Area | Status) — the whole day in ~8 rows. Include:
- Active IcM count (+ Sev note); Triage result (e.g. "✅ 0 unassigned (was N →
- X resolved · Y to me · Z to lingc)"); each pipeline d/e/f/g as 🔴/✅ one-liner;
- Request errors new/24h (SubReq/PlannedQuota/Parent/Plan/CapOrder); Dominant theme.>
+### Table rules
 
-## 🎤 Speakable summary (read this at the checkpoint)
-<2-4 short spoken-English paragraphs the on-call reads aloud. Lead with the IcM
- count + the dominant theme, then the triage result, then pipeline red/green,
- then "nothing overdue / nothing above SevN". Plain speech, no bullet markers.>
+- **Two columns.** Subject and verdict. Three only if the third is a phrase.
+- **A cell is a phrase**, six words or so. Longer goes in a line under the table.
+- **Same rows every day, same order**, so reading down the verdict column tells the
+  whole story and a missing row means something was skipped.
+- **No id columns, no build numbers, no assertions, no totals** beside the new
+  counts. "four days running" is the readable form of four run ids.
+- **One marker at most per row** (🔴 for red). Emoji everywhere is emoji nowhere.
 
-## 1. Active IcM — <count> (all triaged / N unassigned)
-**Triage actions this run** (N unassigned → M):
-<A table: Action | Count | Target | What. Rows for ✅ Resolved (list ids),
- ✳️ Assigned → <alias> (one row per target alias, describe the families).>
+### Shape
 
-**By query** (full raw list in Appendix):
-<A table: Query | Count | Top families. One row per shared query (By Monitor /
- CIS RP / CIS-Ev2 Bridge / PlannedQuotas / Other), query name LINKED to queryUrl.
- Top families = "26× FulfillPlannedQuota (500365) · 9× …" condensed on one line.>
+Two short tables and a few lines. Aim for a minute, whichever way it is consumed.
 
-> **Root cause of <the dominant cluster>** (…): <one blockquote line tying the
->  biggest family to its known root cause + fix track.>
+```markdown
+OnCall Brief, <date>
 
-## 2. Daily checklist
-<ONE table for all of a–n: | # | Item | Status |. Each row = the checklist item
- (short name) + its result. Use 🔴 FAILED / ✅ / ⚠️ / 📋 markers. Bold the row's
- # for anything needing attention (failed pipeline, non-zero error view). Green
- items get a terse "✅ 0 new (N total)" or "✅ succeeded — [link]"; attention items
- carry the WHAT + link inline. Pipelines link name→pipelineUrl (+ ev2RolloutUrl),
- failed run→runUrl. Request errors h–l: new-in-24h vs historical total, and for
- non-zero show WHAT (regions/parents/ids); item k include genevaError.rootCause.>
+<One line verdict: queue size, whether anything is unowned or overdue, what is red.>
 
-## 📌 Known ongoing (handover)
-<A table: Item | Status. Carry context forward. On the FIRST report of the
- rotation seed from the day-1 handover in reference.md; after that, if a prior
- OnCall_*.md exists in ~/Tasks/Scrum/, carry its Known-ongoing table forward.>
+| Area | Status |
+|---|---|
+| Incident queue | <count, owned/unowned, top cause as a phrase> |
+| Support + Feature Requests | <what came in, what needs an answer> |
+| AGC Support | <same, or why unavailable> |
+| bowloper mail | <same> |
+| Sub / parent / quota errors | <new in 24h, or "none"> |
+| Regional plans | <new + Geneva cause as a phrase, or "none"> |
+| Capacity orders | <new, or "none"> |
 
-## Weekly
-<hand-over meeting reminder at end of rotation>
+| Pipeline | Status |
+|---|---|
+| [Rolling Test](<url>) | <verdict + how long> |
+| [Daily UAT](<url>) | <verdict> |
+| [Planned Quota ARM](<url>) | <verdict> |
+| [Release Incremental](<url>) | <verdict> |
+| [WebJobs](https://portal.azure.com/#@microsoft.onmicrosoft.com/resource/subscriptions/c9e275b8-def5-4853-b8e3-47b4255228cc/resourceGroups/lionrock-uat/providers/Microsoft.Web/sites/lionrock-webjob-uat/webJobs) | <verdict: what is failing, and for how long> |
 
----
+<One short line per red row: what is broken in plain words, what you did, with the
+ PR or bug linked. Skip anything the tables already say.>
 
-## 📋 Appendix — All <count> raw IcM incidents (per query)
-`✳️` = assigned this run · `✅resolved` = resolved this run.
-<Per shared query, a `### <Query> — <count> incidents` heading + a table:
- | IncidentId | Sev | Owner | Title |. EVERY IncidentId is a clickable link
- [`<id>`](portalUrl). Mark this-run actions in the Owner cell (alias ✳️ / — ✅resolved).
- This is the full raw dump the team asked for — list ALL incidents, do not fold.>
+<Known ongoing: one line per item carried forward, only while still true.>
+
+<Only if something needs a person: one line saying what and who.>
 ```
 
-**Why the appendix:** the team asked (scrum decision) to see the full raw IcM
-list, not just the summary. §1 stays a summary (tables); the Appendix carries
-every incident. Build the appendix from the full `icm-pending` JSON (all rows),
-grouped into the same 5 buckets the collector uses.
+**The full incident list lives in the file, not in the report.** The team did ask
+(scrum decision) to be able to see every raw incident, and that still holds — but a
+122-row dump defeats both reading and skimming, so it goes at the end of the local
+`.md` from step 3, under a `## Full incident list` heading, grouped into the same 5
+buckets the collector uses. The report above stays the readable part and links the
+queries; anyone who wants the rows opens the file or the query.
 
-**Links, always.** Never emit a bare id or a naked URL — wrap it:
-- IcM incident → `[`<IncidentId>`](portalUrl)`; query name → `[query](queryUrl)`.
-- sub/parent/planned-quota request → `[`<RequestId>`](requestUrl)` (`/quota/requests/<id>`).
-- regional plan (item k) → link its name/region via `planUrl`.
-- pipeline → `[name](pipelineUrl)`, failed run → `[<num>](runUrl)`.
+**Links go on words, never on their own.** A link should disappear when spoken: put
+it on the noun you were going to say anyway.
+
+- good: "the [planned-quota cluster](queryUrl) is most of it"
+- bad: "FulfillPlannedQuota: 26. Query: https://portal.microsofticm.com/..."
+
+Link the shared query, the pipeline, a request or plan you single out, a PR or bug.
+**Do not link every incident** in the report — that is what the file is for. Never
+a bare id, never a naked URL.
 
 ### 3. Persist (both, immediately — don't wait for review)
 
@@ -178,17 +181,18 @@ grouped into the same 5 buckets the collector uses.
   under it). Obsidian vault root:
   `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/Notes`.
   Do not commit.
-- **Local**: write `~/Tasks/Scrum/OnCall_YYYY-MM-DD.md` (full report).
+- **Local**: write `~/Tasks/Scrum/OnCall_YYYY-MM-DD.md` — the report, then the
+  `## Full incident list` section (every incident, grouped by the 5 buckets). This
+  file is where the raw rows live, which is what keeps the report itself readable.
 
 ### 4. Send to the user's Notes to self
 
 Send the report to the user's **Notes to self** (Teams `48:notes`). This is a
 self-send, not an outbound message, so **no confirmation gate** — do it as part
-of the run. Build an HTML body (Teams ignores markdown; use `<b>`, `<a href>`,
-and **`<table>` for the At-a-glance / checklist / IcM-by-query tables** — the
-report is table-first, so render those as real HTML tables, not bullets). The
-full 122-row Appendix can be summarized/omitted in the Teams body (link-heavy
-tables are huge) — the local `.md` keeps the full raw list. Then:
+of the run. Build an HTML body (Teams ignores markdown; use `<b>`, `<a href>`, and
+real `<table>` for the two tables — they are the backbone of the report, so they
+must render as tables and not as bullets). Send the report exactly as written: the
+full incident list stays in the local `.md` and never goes in the message. Then:
 
 ```bash
 cat /tmp/oncall-brief.html | node ~/.claude/skills/o-teams-digest/bin/send-to-self.mjs --html -

@@ -1,6 +1,6 @@
 ---
 name: vuln-verify
-description: Use when receiving vulnerability reports (CVE, Defender alerts, S360 action items, image scan results) — pulls active vulnerabilities straight from the S360 Kusto cluster (shavulnmgmtprdwus/ShaS360) via fetch-vulns.py, summarizes them, then verifies with vuln-verify.sh (Go), vuln-verify-os.sh (OS pkg), vuln-verify-java.sh (Java jar) to confirm each is still present before planning remediation
+description: Use when receiving vulnerability reports (CVE, Defender alerts, S360 action items, image scan results) — pulls active vulnerabilities straight from the S360 Kusto cluster (shavulnmgmtprdwus/ShaS360) via fetch-vulns.mjs, summarizes them, then verifies with vuln-verify.sh (Go), vuln-verify-os.sh (OS pkg), vuln-verify-java.sh (Java jar) to confirm each is still present before planning remediation
 ---
 
 # Vulnerability Verification
@@ -25,7 +25,7 @@ All scripts `kubectl exec` into `deploy/azure-cli` and run `relogin` there — t
 |---|---|
 | `scripts/batch-verify.py [--fetch] [--concurrency N] [--no-cleanup] [--cache-ttl S] [--out report.json]` | **Preferred single entry point.** End-to-end pipeline: fetch Kusto → distinct images → ACR precheck (exists? latest digest?) → AKS precheck + auto-delete `Succeeded` pods using target images → parallel `crane export` extraction of every live image (dpkg/apk/rpm/java/node in one pass) → cross-reference each Kusto row against cache → emit FIXED/VULNERABLE/IMAGE GONE/NOT PRESENT/SKIPPED. Reuses `deploy/azure-cli` pod when Ready, falls back to spinning up `vuln-verify-tmp`. Cache at `/tmp/vuln-cache/` (default 1h TTL) means re-runs are ~70s vs ~500s cold. Go rows are SKIPPED — fall back to `vuln-verify.sh` for Go |
 | `scripts/_extract-all-deps.py` | Pod-side helper invoked by `batch-verify.py`. Exports a single image via crane, dumps dpkg/apk/rpm/java/node install lists to stdout as JSON. Don't run directly |
-| `scripts/fetch-vulns.py [--owner GUID] [--format json\|table\|summary] [--out file]` | Query the S360 Kusto cluster (`shavulnmgmtprdwus` / `ShaS360`) via `GetUnifiedS360ActionDetails` and return all active vulnerabilities for the given RemediationOwner. Default owner is the BET team (`66fc1dd2-fca0-43fe-a29e-e5019a29e949`). Default format is JSON — use `--format summary` for quick grouped counts, `--format table` for per-row pretty print. Relies on `az login` and reuses `~/.claude/skills/kusto-query/scripts/kusto_helper.py`. `batch-verify.py` calls this automatically |
+| `scripts/fetch-vulns.mjs [--owner GUID] [--format json\|table\|summary] [--out file]` | Query the S360 Kusto cluster (`shavulnmgmtprdwus` / `ShaS360`) via `GetUnifiedS360ActionDetails` and return all active vulnerabilities for the given RemediationOwner. Default owner is the BET team (`66fc1dd2-fca0-43fe-a29e-e5019a29e949`). Default format is JSON — use `--format summary` for quick grouped counts, `--format table` for per-row pretty print. Relies on `az login` and calls the iris kusto SDK via `_iris-shared`. `batch-verify.py` calls this automatically |
 | `scripts/list-acr-images.sh` | List all repositories in `betprod` ACR |
 | `scripts/query-go-libs.sh <repo>[:tag\|@digest] [filter]` | Dump Go `mod`/`dep`/`=>` lines from every Go binary in the image. Accepts bare repo (no tag → latest digest) or full `betprod.azurecr.io/...@sha256:...` |
 | `scripts/query-os-packages.sh <repo>[:tag\|@digest] [filter]` | Dump installed OS packages (dpkg for Debian/Ubuntu, apk for Alpine) from the image. Output format: `<mgr>\t<name>\t<version>` |
@@ -95,7 +95,7 @@ When the user just says "verify our vulns" without attaching a report, fetch the
 - **Stored function:** `GetUnifiedS360ActionDetails(_Filter_RemediationOwner)`
 - **Default RemediationOwner (BET team):** `66fc1dd2-fca0-43fe-a29e-e5019a29e949`
 
-The canonical query (already embedded in `fetch-vulns.py`) filters out `NotFound` scan results, `Orphaned Image`, and App Service assets, then dedupes to the latest scan per (VMSSArmId, VulnerabilityId, ImageId).
+The canonical query (already embedded in `fetch-vulns.mjs`) filters out `NotFound` scan results, `Orphaned Image`, and App Service assets, then dedupes to the latest scan per (VMSSArmId, VulnerabilityId, ImageId).
 
 Key columns in each returned row:
 
@@ -112,7 +112,7 @@ Key columns in each returned row:
 
 ### Classifying a row into Go / OS / Java
 
-`fetch-vulns.py` returns the raw `ScanResult`. Decide which verify script to feed each row into by looking at the scanner text plus the image origin:
+`fetch-vulns.mjs` returns the raw `ScanResult`. Decide which verify script to feed each row into by looking at the scanner text plus the image origin:
 
 | Signal in `ScanResult` | Treat as | Verifier |
 |---|---|---|
@@ -158,11 +158,11 @@ Only when there is no pasted/file report. Skip this step if the user already gav
 
 ```bash
 # Full JSON dump (default) — pipe to jq for grouping
-./scripts/fetch-vulns.py --out /tmp/vulns.json
+./scripts/fetch-vulns.mjs --out /tmp/vulns.json
 jq 'length' /tmp/vulns.json
 
 # Quick grouped summary for the user
-./scripts/fetch-vulns.py --format summary
+./scripts/fetch-vulns.mjs --format summary
 ```
 
 Before moving on, **present a summary to the user**, including at least:

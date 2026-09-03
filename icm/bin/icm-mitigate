@@ -12,7 +12,17 @@ import { icm } from "../../_iris-shared/index.mjs";
 const [incidentId, reason] = process.argv.slice(2);
 if (!incidentId || !reason) { console.error('usage: icm-mitigate ID "REASON"'); process.exit(2); }
 
-const contactAlias = process.env.ICM_CONTACT_ALIAS || os.userInfo().username;
+// os.userInfo() THROWS in the container: it runs as a bare numeric uid with no passwd
+// entry, so the fallback that works on a host is a hard failure here -- and this is the
+// mitigate path, reached only when someone is trying to act on a live incident. Fall
+// through ICM_ALIAS, which the deployment already sets for the same reason.
+const contactAlias = process.env.ICM_CONTACT_ALIAS
+  || process.env.ICM_ALIAS
+  || (() => { try { return os.userInfo().username; } catch { return ""; } })();
+if (!contactAlias) {
+  console.error("icm-mitigate: no contact alias. Set ICM_CONTACT_ALIAS (or ICM_ALIAS) — IcM rejects a missing or non-real alias.");
+  process.exit(2);
+}
 const howFixed = process.env.ICM_HOW_FIXED || "ByDesign";
 
 const res = await icm.mitigate(incidentId, reason, { contactAlias, howFixed });

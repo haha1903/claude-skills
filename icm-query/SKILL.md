@@ -1,6 +1,7 @@
 ---
 name: icm-query
 description: Use when the user wants to read or summarize IcM incidents for the BET tenant from the IcM Kusto warehouse (icmcluster / IcmDataWarehouse) — e.g. pending-action incidents for daily scrum, or any ad-hoc KQL over Incidents/IncidentDescriptions/IncidentCustomFieldEntries.
+summary: Read or aggregate many IcM incidents from the Kusto warehouse
 ---
 
 # IcM Query (Kusto warehouse)
@@ -16,12 +17,18 @@ sibling `icm` skill which calls the IcM REST API.
 
 | Script | What it does |
 |---|---|
-| `bin/icm-pending` | Run the pending-action KQL (tenant `25998`) and print JSON to stdout. |
+| `bin/icm-pending` | Run the pending-action KQL (tenant `25998`) and print JSON to stdout. Kusto warehouse (10-15min lag). |
+| `bin/icm-pending-by-family` | Snapshot the pending queue grouped by the "Pending Action" shared-query families (By Monitor / CIS RP / CIS-Ev2 Bridge / Other / PlannedQuotas). Live `/api2`, excludes `oncall-bot-handled`, includes a groupedCount==allCount reconciliation. `--counts` drops the incident arrays. |
 
-The script is a thin Node wrapper over iris `icm.pendingActions` (which queries the
+`icm-pending` is a thin Node wrapper over iris `icm.pendingActions` (which queries the
 IcM Kusto warehouse via iris `kusto.queryKusto`; az cli token + fetch, no SDK).
 Token is minted on demand via `az account get-access-token --resource
 https://icmcluster.kusto.windows.net`.
+
+`icm-pending-by-family` wraps iris `icm.pendingByFamily` (the portal's shared
+queries via `/api2/incidentapi`, cert token) — this is the on-call drain's
+snapshot; prefer it over `icm-pending` for on-call since it's live (no warehouse
+lag) and pre-grouped by the team's own query definitions.
 
 ## Run
 

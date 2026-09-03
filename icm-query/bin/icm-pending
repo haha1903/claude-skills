@@ -10,7 +10,6 @@
  * (team-owned, no individual), "all" or omitted (no filter). Default:
  * $ICM_QUERY_OWNER or no filter.
  */
-import os from "node:os";
 import { icm } from "../../_iris-shared/index.mjs";
 
 const argv = process.argv.slice(2);
@@ -18,10 +17,12 @@ const oi = argv.indexOf("--owner");
 const owner = oi >= 0 ? argv[oi + 1] : process.env.ICM_QUERY_OWNER;
 
 const rows = await icm.pendingActions(owner);
-const lower = owner ? String(owner).toLowerCase() : "";
-const alias = !owner || lower === "all" ? null
-  : lower === "me" ? os.userInfo().username
-  : lower === "unassigned" ? "" : owner;
+// icm.resolveOwner, not a second copy of the same three lines. This file used to repeat
+// them to echo `ownerFilter`, and the copy still called os.userInfo() after iris had
+// stopped -- so `--owner me` kept dying with `uv_os_get_passwd returned ENOENT` in the
+// container, one line further down than before. Duplicated logic is what made the fix
+// look applied while the crash stayed.
+const { alias } = icm.resolveOwner(owner);
 
 console.log(JSON.stringify({
   database: icm.WAREHOUSE_DB,
