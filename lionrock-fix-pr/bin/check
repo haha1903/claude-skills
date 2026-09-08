@@ -71,6 +71,8 @@ def status(directory):
 
 
 def worker(directory, fd):
+    # Keep HTTP and agent polling responsive when compilation exhausts the CPU quota.
+    os.nice(10)
     latest = directory / 'latest.json'
     state = json.loads(latest.read_text())
     root, target = Path(state['worktree']), state['target']
