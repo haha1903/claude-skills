@@ -100,7 +100,7 @@ def worker(directory, fd):
     frontend = root / 'src/Lionrock/service/Lionrock.WebApp/ClientApp'
     if (frontend / 'package-lock.json').exists():
         stages.insert(0, ('frontend-restore', ['node', str(Path(__file__).with_name('npm-with-auth.mjs')),
-                                               str(frontend), 'ci', '--fetch-timeout=60000', '--fetch-retries=2']))
+                                               str(frontend), 'ci', '--include=dev', '--fetch-timeout=60000', '--fetch-retries=2']))
     try:
         state.update(status='running', pid=os.getpid())
         for name, command in stages:

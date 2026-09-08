@@ -48,7 +48,7 @@ Use the durable check runner in the container. It runs restore, build and unit t
 in order, with a lock covering the entire worktree. A second start reports the running
 job instead of launching another build. It refreshes private-feed authentication in
 the same shell as restore, disables compiler-server reuse and limits build parallelism.
-When the WebApp frontend exists, it first runs authenticated `npm ci` through iris's
+When the WebApp frontend exists, it first runs authenticated `npm ci --include=dev` through iris's
 ADO workload identity, preserving the repository's script and dependency policies.
 This installs real dependencies before MSBuild reaches its local credential-helper
 target. An npm failure stops the run before the expensive .NET compilation.
