@@ -1,0 +1,189 @@
+#!/usr/bin/env python3
+"""Persistent, single-writer restore/build/unit-test runner (macOS and Linux)."""
+import argparse
+import datetime
+import fcntl
+import hashlib
+import json
+import os
+import signal
+from pathlib import Path
+import subprocess
+import sys
+import time
+import uuid
+
+
+def now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def save(path, state):
+    tmp = path.with_suffix('.tmp')
+    tmp.write_text(json.dumps(state, indent=2) + '\n')
+    tmp.replace(path)
+
+
+def acquire(path):
+    fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fd
+    except BlockingIOError:
+        os.close(fd)
+        return None
+
+
+def fingerprint(root):
+    def git(*args):
+        return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.DEVNULL)
+    digest = hashlib.sha256(git('rev-parse', 'HEAD') + git('diff', 'HEAD', '--binary'))
+    for raw in git('ls-files', '--others', '--exclude-standard', '-z').split(b'\0'):
+        if raw:
+            file = root / os.fsdecode(raw)
+            digest.update(raw)
+            digest.update(file.read_bytes())
+    return digest.hexdigest()
+
+
+def state_dir(root):
+    base = Path(os.environ.get('LOOP_CHECK_ROOT', str(Path(os.environ.get('LOOP_ROOT', str(Path.home() / '.cache/loop'))) / 'builds')))
+    key = hashlib.sha256(str(root).encode()).hexdigest()[:20]
+    directory = base / key
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def status(directory):
+    latest = directory / 'latest.json'
+    fd = acquire(directory / 'lock')
+    try:
+        if not latest.exists():
+            return {'status': 'starting' if fd is None else 'not_started'}
+        state = json.loads(latest.read_text())
+        if fd is not None and state['status'] in ('starting', 'running'):
+            state.update(status='interrupted', finished_at=now(), reason='Worker stopped before completion; start again to restore and verify.')
+            save(latest, state)
+        return state
+    finally:
+        if fd is not None:
+            os.close(fd)
+
+
+def worker(directory, fd):
+    latest = directory / 'latest.json'
+    state = json.loads(latest.read_text())
+    root, target = Path(state['worktree']), state['target']
+    env = os.environ.copy()
+    env['NUGET_PACKAGES'] = state['packages']
+    env['MSBUILDDISABLENODEREUSE'] = '1'
+    env['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1'
+    env['CI'] = 'true'
+    dotnet = 'dotnet'
+    build_options = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
+    restore = [dotnet, 'restore', target, '--force', '--disable-parallel', *build_options, '-v:minimal']
+    login = Path('/usr/local/bin/nuget-login')
+    if login.exists():
+        # Source in the SAME shell as dotnet. A pipe around source loses the exports.
+        restore = ['bash', '-c', 'source "$1" >&2; test -n "$VSS_NUGET_EXTERNAL_FEED_ENDPOINTS" || exit 1; shift; exec "$@"', 'nuget-auth', str(login), *restore]
+    stages = [
+        ('restore', restore),
+        ('build', [dotnet, 'build', target, '--no-restore', '--disable-build-servers', *build_options, '-v:minimal']),
+        ('test', [dotnet, 'test', '--solution' if target.endswith(('.sln', '.slnx')) else '--project', target,
+                  '--no-restore', '--no-build', '-p:RunOnlyUnitTests=true', '--max-parallel-test-modules', '1']),
+    ]
+    try:
+        state.update(status='running', pid=os.getpid())
+        for name, command in stages:
+            logfile = Path(state['run_dir']) / (name + '.log')
+            state.update(stage=name, log=str(logfile), updated_at=now())
+            save(latest, state)
+            with logfile.open('w') as log:
+                # Inherit the lock so a surviving build still excludes another writer even if
+                # its Python parent is killed. The worker has a session separate from cl.
+                process = subprocess.Popen(command, cwd=root, env=env, stdin=subprocess.DEVNULL,
+                                           stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,), start_new_session=True)
+                try:
+                    code = process.wait(timeout=3600)
+                except subprocess.TimeoutExpired:
+                    state.update(status='failed', reason=name + ' exceeded 1 hour', finished_at=now())
+                    save(latest, state)
+                    code = 124
+                finally:
+                    # Test runners can launch diff viewers or build servers. They inherit
+                    # the lock too, so reap this stage's process group even on normal exit.
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+            state.setdefault('results', {})[name] = {'exit_code': code, 'log': str(logfile)}
+            if code:
+                state.update(status='failed', finished_at=now())
+                save(latest, state)
+                return
+        if fingerprint(root) != state['source_fingerprint']:
+            state.update(status='failed', reason='Tracked source changed during verification; run again.')
+        else:
+            state.update(status='succeeded')
+        state.update(finished_at=now())
+        save(latest, state)
+    except Exception as error:
+        state.update(status='failed', reason=str(error), finished_at=now())
+        save(latest, state)
+    finally:
+        save(Path(state['run_dir']) / 'result.json', state)
+        os.close(fd)
+
+
+def main():
+    if len(sys.argv) == 4 and sys.argv[1] == '_worker':
+        worker(Path(sys.argv[2]), int(sys.argv[3]))
+        return
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('command', choices=['start', 'status'])
+    parser.add_argument('worktree', type=Path)
+    parser.add_argument('target', nargs='?', help='Project or solution, relative to worktree')
+    args = parser.parse_args()
+    root = args.worktree.resolve(strict=True)
+    directory = state_dir(root)
+    if args.command == 'status':
+        print(json.dumps(status(directory), indent=2))
+        return
+    if not args.target:
+        parser.error('start requires a test project or solution')
+    target = (root / args.target).resolve(strict=True)
+    if not target.is_relative_to(root) or target.suffix not in ('.csproj', '.sln', '.slnx'):
+        parser.error('target must be a project/solution inside the worktree')
+    fd = acquire(directory / 'lock')
+    if fd is None:
+        result = status(directory)
+        result['already_running'] = True
+        print(json.dumps(result, indent=2))
+        return
+    try:
+        # Close any interrupted previous record before replacing latest, retaining its logs.
+        previous = directory / 'latest.json'
+        if previous.exists():
+            old = json.loads(previous.read_text())
+            if old['status'] in ('starting', 'running'):
+                old.update(status='interrupted', finished_at=now())
+                save(Path(old['run_dir']) / 'result.json', old)
+        run_dir = directory / (time.strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:8])
+        run_dir.mkdir()
+        packages = os.environ.get('NUGET_PACKAGES', str(directory.parent / 'nuget-packages'))
+        state = {'status': 'starting', 'worktree': str(root), 'target': str(target.relative_to(root)),
+                 'started_at': now(), 'run_dir': str(run_dir), 'packages': packages,
+                 'source_fingerprint': fingerprint(root), 'results': {}}
+        save(previous, state)
+        with (run_dir / 'worker.log').open('w') as log:
+            subprocess.Popen([sys.executable, str(Path(__file__).resolve()), '_worker', str(directory), str(fd)],
+                             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                             pass_fds=(fd,), start_new_session=True)
+        print(json.dumps(state, indent=2))
+    finally:
+        os.close(fd)
+
+
+if __name__ == '__main__':
+    main()
