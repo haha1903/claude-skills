@@ -81,6 +81,7 @@ def worker(directory, fd):
     env['MSBUILDDISABLENODEREUSE'] = '1'
     env['DOTNET_CLI_TELEMETRY_OPTOUT'] = '1'
     env['CI'] = 'true'
+    env['NPM_CONFIG_CACHE'] = str(directory.parent / 'npm-cache')
     dotnet = 'dotnet'
     build_options = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
     restore = [dotnet, 'restore', target, '--force', '--disable-parallel', *build_options, '-v:minimal']
@@ -94,6 +95,12 @@ def worker(directory, fd):
         ('test', [dotnet, 'test', '--solution' if target.endswith(('.sln', '.slnx')) else '--project', target,
                   '--no-restore', '--no-build', '-p:RunOnlyUnitTests=true', '--max-parallel-test-modules', '1']),
     ]
+    # Install real frontend dependencies before MSBuild reaches DebugEnsureNodeEnv.
+    # That local-development target expects an interactive credential helper on PATH.
+    frontend = root / 'src/Lionrock/service/Lionrock.WebApp/ClientApp'
+    if (frontend / 'package-lock.json').exists():
+        stages.insert(0, ('frontend-restore', ['node', str(Path(__file__).with_name('npm-with-auth.mjs')),
+                                               str(frontend), 'ci', '--fetch-timeout=60000', '--fetch-retries=2']))
     try:
         state.update(status='running', pid=os.getpid())
         for name, command in stages:

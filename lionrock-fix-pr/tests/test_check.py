@@ -34,4 +34,8 @@ class CheckTest(unittest.TestCase):
   again=self.call('start');self.assertNotIn('already_running',again);self.assertEqual(self.finish()['status'],'succeeded')
  def test_source_change_invalidates_pass(self):
   self.call('start');(self.repo/'Test.csproj').write_text('changed');s=self.finish();self.assertEqual(s['status'],'failed');self.assertIn('changed',s['reason'])
+ def test_frontend_auth_failure_stops_before_dotnet(self):
+  frontend=self.repo/'src/Lionrock/service/Lionrock.WebApp/ClientApp';frontend.mkdir(parents=True);(frontend/'package-lock.json').write_text('{}')
+  node=self.bin/'node';node.write_text('#!/bin/sh\nexit 7\n');node.chmod(0o755)
+  self.call('start');s=self.finish();self.assertEqual(s['status'],'failed');self.assertEqual(s['results']['frontend-restore']['exit_code'],7);self.assertFalse((self.root/'calls').exists())
 if __name__=='__main__':unittest.main()

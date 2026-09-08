@@ -34,13 +34,13 @@ Two steps in the container come first, and neither is optional.
 **Work in a worktree, never the shared `/data/Projects/Lionrock`.** It is a SHARED
 checkout -- other flows edit it at the same time, and branching or building in it
 directly races them (two writers overwrite each other with no error). Add a worktree
-off an up-to-date `origin/main` and stay in it for everything below:
+off an up-to-date `origin/master` and stay in it for everything below:
 
 ```bash
 R=$HOME/Projects/Lionrock                       # repo is AzureGlobal-DCValidation
 WT=$HOME/Worktrees/<task>/Lionrock
 git -C "$R" fetch origin
-git -C "$R" worktree add "$WT" -b <alias>/<short-description> origin/main
+git -C "$R" worktree add "$WT" -b <alias>/<short-description> origin/master
 cd "$WT"
 ```
 
@@ -48,6 +48,10 @@ Use the durable check runner in the container. It runs restore, build and unit t
 in order, with a lock covering the entire worktree. A second start reports the running
 job instead of launching another build. It refreshes private-feed authentication in
 the same shell as restore, disables compiler-server reuse and limits build parallelism.
+When the WebApp frontend exists, it first runs authenticated `npm ci` through iris's
+ADO workload identity, preserving the repository's script and dependency policies.
+This installs real dependencies before MSBuild reaches its local credential-helper
+target. An npm failure stops the run before the expensive .NET compilation.
 
 ```bash
 CHECK="$HOME/.claude/skills/lionrock-fix-pr/bin/check"
@@ -61,7 +65,7 @@ stage log; keep individual waits below one minute. Never launch a second raw `do
 command just to collect errors. Never pipe `source nuget-login`: its exports would be
 lost in the subshell. Never hide the actual exit code behind `tail` or `grep`.
 
-Only `status: succeeded` means the three checks passed. `results` records each exit
+Only `status: succeeded` means all stages passed. `results` records each exit
 code and full log. Confirm `target` covers the requested checks; a running job may be
 for another project in the same worktree. Logs, results and NuGet packages live on the
 persistent volume. A cl timeout leaves this managed job running; a container restart
