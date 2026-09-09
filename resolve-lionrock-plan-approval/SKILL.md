@@ -20,7 +20,9 @@ When someone reports their plan's status but supplies no plan identity, request
 the plan detail link or serviceTreeId and region (plus blueprint/version if known)
 before giving case-specific blockers or next actors. A missing link does not make
 this a generic product question. State that the next actor is unverified; a brief
-general explanation can accompany the missing-input request. Do not infer a plan
+general explanation of the two CommunicationNeeded message directions can
+accompany the missing-input request. Address the caller directly; omit Skill
+narration and a separate "reply to" preamble. Do not infer a plan
 from an unrelated conversation or claim a live lookup without an identifiable key.
 
 In general explanations, `Action Required` is the portal display for an
@@ -29,6 +31,9 @@ MCP CCO row also uses `ActionRequired`. The label alone proves neither an
 outstanding reviewer question nor that the requester owes the next reply.
 Explain both requester-response and pending-CCO-review possibilities until
 the actual sub-order messages establish which applies.
+`Accepted` / `InProgress` alone does not trigger the Action Required display.
+Those states can coexist with another order's CommunicationNeeded or reflect
+stored/live differences; explain that distinction if those states are mentioned.
 `Approvable` is the approval phase, not a statement that the requester must act.
 On-demand request-state guidance does not define Execution Plan display labels.
 
