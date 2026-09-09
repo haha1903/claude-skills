@@ -1,8 +1,8 @@
 ---
 name: resolve-lionrock-plan-approval
-description: Use when someone asks about a Lionrock Execution Plan or regional plan's approval, Action Required, CCO capacity orders, readiness, rejection or processing error. Determine the blocker and whether the next action belongs to an approver, requester, CCO or execution. On-demand sub-request approvals use resolve-lionrock-on-demand-approval. Read-only.
+description: Use for Lionrock Execution Plan or regional plan approval, status, Action Required, CCO capacity orders, readiness, rejection, processing errors and who acts next, including general explanations and questions without a plan link or identifiers. Establish missing identity before diagnosing a particular plan. On-demand sub-request approvals use resolve-lionrock-on-demand-approval. Read-only.
 summary: Explain Execution Plan approvals, CCO communication and readiness
-handles: [Ask.PlanApproval, Ask.RequestStatus, Ask.RequestError]
+handles: [Ask.PlanApproval, Ask.RequestStatus, Ask.RequestError, Ask.HowItWorks]
 ---
 
 # Resolve Execution Plan approvals and blockers
@@ -16,12 +16,21 @@ caller's reply contract, and [lionrock-mcp](../lionrock-mcp/SKILL.md) for live r
 
 ## Identify the exact plan
 
+When someone reports their plan's status but supplies no plan identity, request
+the plan detail link or serviceTreeId and region (plus blueprint/version if known)
+before giving case-specific blockers or next actors. A missing link does not make
+this a generic product question. State that the next actor is unverified; a brief
+general explanation can accompany the missing-input request. Do not infer a plan
+from an unrelated conversation or claim a live lookup without an identifiable key.
+
 In general explanations, `Action Required` is the portal display for an
 `Approvable` plan with a stored CCO order in `CommunicationNeeded`; the synthetic
 MCP CCO row also uses `ActionRequired`. The label alone proves neither an
 outstanding reviewer question nor that the requester owes the next reply.
 Explain both requester-response and pending-CCO-review possibilities until
 the actual sub-order messages establish which applies.
+`Approvable` is the approval phase, not a statement that the requester must act.
+On-demand request-state guidance does not define Execution Plan display labels.
 
 An Execution Plan is keyed by `serviceTreeId + region + blueprint + version`.
 Preserve all four fields, including blueprint suffixes and the region's friendly
