@@ -45,6 +45,9 @@ Call `get_execution_plan_approvals` for the exact four-part key. Read its
    history. Eligible aliases are alternatives, not assigned owners.
 3. Inspect every associated CCO order. Completed GCT does not establish capacity
    approval. The synthetic CCO row is not a Lionrock role with approver aliases.
+   `Accepted` / `InProgress` remains pending CCO processing. Without a reviewer
+   question, say no customer reply is currently indicated; do not say the order
+   needs no action or is complete. A submitter is not proof of the current owner.
 4. For `CommunicationNeeded` / `ActionRequired`, inspect each affected sub-order's
    latest message and author. Quote the outstanding question and returned
    `replyPath` when a customer response is needed. If the latest author is
@@ -59,6 +62,9 @@ different reads. Preserve the discrepancy and use the returned detail to describ
 that order; do not claim the persisted plan has advanced. An order-level `error`,
 missing messages or unknown actor leaves a specific gap. Empty approvals or
 unavailable CCO details do not establish completion.
+Only give a sub-order reply link when its identifier and complete path are
+present. An entry without a sub-order ID stays unidentified; do not link to an
+incomplete `/subOrders/` path.
 
 ## Explain causes and finish
 
