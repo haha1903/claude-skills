@@ -89,6 +89,11 @@ Do not route back to the generic request resolver for the same plan diagnosis.
 Respect denied capabilities and report unavailable evidence explicitly.
 
 Return the plan identity, current outcome, remaining internal gates, CCO action
-and verified next step with the plan or sub-order link. Mixed blockers stay
-separate. The caller owns delivery and outcome recording. This skill does not
+and verified next step with the plan or sub-order link. Account for every CCO
+entry in the answer, including entries without an ID or messages. For each,
+state its status, what remains pending and whether a customer reply is indicated.
+An `Accepted` / `InProgress` entry must explicitly remain **pending CCO
+processing; no customer reply currently indicated** when no question is present.
+Do not summarize it as unblocked or omit it after listing communication blockers.
+Mixed blockers stay separate. The caller owns delivery and outcome recording. This skill does not
 approve, reply to CCO, reprocess, reassign, retry, push a plan or send another message.
