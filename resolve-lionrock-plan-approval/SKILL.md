@@ -76,6 +76,9 @@ unavailable CCO details do not establish completion.
 Only give a sub-order reply link when its identifier and complete path are
 present. An entry without a sub-order ID stays unidentified; do not link to an
 incomplete `/subOrders/` path.
+Use the supplied plan link and returned complete reply paths. Do not invent a
+parent-order discussion URL by removing `/subOrders/<id>`; the portal does not
+define an `/capacityOrder/orders/<orderId>` route.
 
 ## Explain causes and finish
 
