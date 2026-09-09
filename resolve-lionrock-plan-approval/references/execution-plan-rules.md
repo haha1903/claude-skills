@@ -46,7 +46,10 @@ The main automatic paths are:
 
 Special whole-plan automatic paths can bypass the ordinary CCO check. Do not say
 every approved plan had a manually approved order. `System` in an approval row
-does not identify which rule fired.
+does not identify which rule fired. If the cause is unknown, report it as unknown;
+do not present the entire list above as possible causes for a specific gate.
+Gate/environment restrictions still apply: the Air-gap path excludes GCT, and
+the UAT path does not apply to production.
 
 ## 3. Who can approve
 
