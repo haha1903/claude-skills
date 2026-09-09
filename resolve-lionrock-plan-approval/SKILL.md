@@ -48,6 +48,15 @@ its exact lookup requires both fields together. Compare the requested version
 with the latest assigned version before recommending approval, but label both
 and never silently replace the requested version with the latest one.
 
+On `found: false`, state that the requested key was not found and its approvers
+cannot be established. Any discovered plan is a separately identified result,
+not a confirmed replacement for the caller's plan. An earlier reported status
+such as Action Required remains unbound until the same full key is established;
+do not attach it to a discovered version. `Approvable` with no returned CCO row
+does not support an Action Required diagnosis. If the caller's badge conflicts
+with the returned data, preserve that discrepancy and request the exact portal
+link instead of guessing which plan they meant.
+
 Planned Quota request IDs identify fulfillment requests, not plans. If starting
 there, read `get_planned_quota_request_status` and relevant history to establish
 the linked service, region, plan version and blueprint. Do not default a missing
