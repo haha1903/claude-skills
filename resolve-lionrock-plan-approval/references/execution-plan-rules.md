@@ -70,7 +70,11 @@ remaining subscription allocations and plan kind. Orders may be reused, and Hobo
 and non-Hobo orders may coexist.
 
 When an order is established for the current version, the job can record internal
-GCT as approved by System. The ordinary path requires **all internal gates and all
+GCT as approved by System. The converse does not follow: GCT Approved by System
+establishes that internal gate's completion, not an order's existence or approval,
+or which automatic rule fired. Establish order association/status from order
+records and the approval cause from rule/history evidence.
+The ordinary path requires **all internal gates and all
 associated CCO orders** to be approved before the plan becomes Approved. No
 associated orders means no CCO gate in that check.
 
@@ -90,8 +94,11 @@ stored order is CommunicationNeeded, `Approved` if all are Approved, otherwise
 `Pending`. This last bucket also includes failed/rejected orders: inspect details.
 
 The CCO summary uses stored statuses; individual order details are fetched from
-CCO and can differ. A failed fetch returns an order-level `error`. Neither that
-failure nor an absent message proves completed approval.
+CCO and can differ. A failed fetch returns an order-level `error` alongside the
+stored `status`; the fields describe different facts. `status: Failed` is an
+order outcome, not evidence of a fetch error. Preserve a known order state when
+reasons/messages are missing, and report a read failure only when one is evidenced.
+Neither a read failure nor an absent message proves completed approval.
 
 ## 5. Action Required and who owes a response
 

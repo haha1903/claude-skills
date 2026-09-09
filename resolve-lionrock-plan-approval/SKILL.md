@@ -96,8 +96,11 @@ different reads. Preserve the discrepancy and use the returned detail to describ
 that order; do not claim the persisted plan has advanced. An order-level `error`,
 missing messages or unknown actor leaves a specific gap. Empty approvals or
 unavailable CCO details do not establish completion.
-For `Failed` / `Rejected`, missing reasons or messages leave the customer-response
-requirement unverified. Do not extend an `Accepted` entry's "no customer reply
+Preserve explicitly supplied order states: `status: Failed` is an order outcome,
+whereas a returned `error` reports a detail-read failure. Missing reasons or
+messages do not make a known `Failed` / `Rejected` status uncertain; they leave
+the cause and customer-response requirement unverified.
+Do not extend an `Accepted` entry's "no customer reply
 currently indicated" finding to other orders with different or missing evidence.
 Only give a sub-order reply link when its identifier and complete path are
 present. An entry without a sub-order ID stays unidentified; do not link to an
