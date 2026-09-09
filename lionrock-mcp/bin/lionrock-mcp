@@ -1,0 +1,73 @@
+#!/usr/bin/env node
+/**
+ * Thin CLI over iris's MCP client for the Lionrock server. Read-only.
+ *
+ *   lionrock-mcp tools                                  # names + input schemas
+ *   lionrock-mcp call <tool> '<json args>'              # one tool call
+ *
+ * Auth is a delegated user token from iris's MSAL cache; see SKILL.md for what to do when
+ * it has expired.
+ */
+import { mcpHttp } from "../../_iris-shared/index.mjs";
+
+const [cmd, toolName, argsJson] = process.argv.slice(2);
+const client = new mcpHttp.McpHttpClient(mcpHttp.LIONROCK_PROD);
+
+// A missing or expired token is the one failure a caller must not read as "nothing wrong",
+// so it is reported as its own shape rather than as an empty result.
+async function guard(fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    const msg = String(e?.message ?? e);
+    const authFailure = /no usable token|IRIS_TOKEN_REFILL|refresh token|invalid_grant|(?:MCP|Lionrock API) 401/i.test(msg);
+    const denied = /(?:MCP|Lionrock API) 403/i.test(msg);
+    console.log(JSON.stringify({
+      ok: false,
+      kind: authFailure || denied ? "not-authorised" : "error",
+      error: msg.slice(0, 600),
+      ...(authFailure ? {
+        cachePath: client.cachePath,
+        fix: "re-import on a machine that can log in: node ~/Projects/iris/bin/import-mcp-token.mjs lionrock, then copy that file onto the PVC",
+        reportAs: "could not read live Lionrock state; answer from the wiki and Kusto and say this source was unavailable",
+      } : {}),
+    }, null, 2));
+    process.exit(1);
+  }
+}
+
+if (cmd === "tools") {
+  const tools = await guard(() => client.listTools());
+  console.log(JSON.stringify({
+    ok: true,
+    count: tools.length,
+    tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+  }, null, 2));
+} else if (cmd === "call") {
+  if (!toolName) {
+    console.error("usage: lionrock-mcp call <tool> '<json args>'");
+    process.exit(2);
+  }
+  let args = {};
+  if (argsJson) {
+    try {
+      args = JSON.parse(argsJson);
+    } catch (e) {
+      console.error(`args must be JSON: ${e.message}`);
+      process.exit(2);
+    }
+  }
+  const content = await guard(() => client.callTool(toolName, args));
+  // Tools answer as MCP content blocks holding a JSON string. Unwrap when that is what it
+  // is, so a caller can read fields, but keep the raw blocks when it is not.
+  const blocks = Array.isArray(content) ? content : [content];
+  const text = blocks.map((b) => b?.text ?? "").join("\n").trim();
+  let payload = null;
+  if (text) {
+    try { payload = JSON.parse(text); } catch { /* not JSON; keep the text */ }
+  }
+  console.log(JSON.stringify({ ok: true, tool: toolName, ...(payload ? { result: payload } : { text, raw: content }) }, null, 2));
+} else {
+  console.error("usage: lionrock-mcp tools | lionrock-mcp call <tool> '<json args>'");
+  process.exit(2);
+}
