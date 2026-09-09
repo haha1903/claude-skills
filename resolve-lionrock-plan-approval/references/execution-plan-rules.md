@@ -125,7 +125,7 @@ next step; posting the response is a separate action.
 | Created | Initial processing; inspect evidence before saying it waits for an approver. |
 | NeedSignOff | Service-team sign-off in the enum. Verify the applicable path: the current processing job moves Created/Error to Approvable directly. |
 | Approvable | Approval phase; inspect internal gates and CCO, not the label alone. |
-| Approved | Approval completed. Readiness and fulfillment remain separate. |
+| Approved | Plan approval completed under the applicable path. Special whole-plan auto-approval can bypass CCO, so this status alone does not prove an associated order is Approved. Readiness and fulfillment remain separate. |
 | Ready | Approved and required dependencies are ready. Portal text is `Ready to Fulfill`. |
 | Error | Processing failed. Get the exact version's error; do not guess a field or recommend blind retry. |
 | Rejected | Give actor/time/comment when available. Stale pending rows do not make this version approvable. |
