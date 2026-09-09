@@ -54,7 +54,11 @@ Call `get_execution_plan_approvals` for the exact four-part key. Read its
    approval. The synthetic CCO row is not a Lionrock role with approver aliases.
    `Accepted` / `InProgress` remains pending CCO processing. Without a reviewer
    question, say no customer reply is currently indicated; do not say the order
-   needs no action or is complete. A submitter is not proof of the current owner.
+   needs no action or is complete. A submitter is not proof of the current owner:
+   keep submitter aliases out of next-actor recommendations unless separate
+   evidence explicitly identifies that person as responsible. Otherwise name
+   only the verified role (requester/service team or CCO reviewer), with the
+   specific person unverified.
 4. For `CommunicationNeeded` / `ActionRequired`, inspect each affected sub-order's
    latest message and author. Quote the outstanding question and returned
    `replyPath` when a customer response is needed. If the latest author is
