@@ -96,6 +96,9 @@ different reads. Preserve the discrepancy and use the returned detail to describ
 that order; do not claim the persisted plan has advanced. An order-level `error`,
 missing messages or unknown actor leaves a specific gap. Empty approvals or
 unavailable CCO details do not establish completion.
+Current order states and messages do not establish what blocked a plan before
+it was removed or replaced, or why that happened. Those historical claims require
+time-aligned plan/order history; keep the current snapshot separate.
 Preserve explicitly supplied order states: `status: Failed` is an order outcome,
 whereas a returned `error` reports a detail-read failure. Missing reasons or
 messages do not make a known `Failed` / `Rejected` status uncertain; they leave
