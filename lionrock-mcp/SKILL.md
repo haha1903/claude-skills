@@ -44,10 +44,11 @@ takes `id`; `get_planned_quota_request_history` takes `requestId`.
 
 ## Who can approve now
 
-Return live approval rows to the calling resolver. Business matching, pending-gate
-interpretation and the user-facing answer belong to
-[resolve-lionrock-approval](../resolve-lionrock-approval/SKILL.md). This capability
-does not invoke a resolver back while it is servicing a read.
+Return live approval rows to the calling resolver. On-demand interpretation belongs
+in [resolve-lionrock-on-demand-approval](../resolve-lionrock-on-demand-approval/SKILL.md);
+Execution Plan gates, CCO communication and readiness belong in
+[resolve-lionrock-plan-approval](../resolve-lionrock-plan-approval/SKILL.md).
+This capability does not invoke a resolver back while servicing a read.
 
 For an on-demand sub-request, always pass both `id` and the positive integer
 `subRequestId`. A combined `id` such as `11282636-1` still requires `subRequestId: 1`;
@@ -70,10 +71,14 @@ approved.** A Created status, ApprovedBy summary, or OperationLog alone cannot e
 that all required approvals are complete. `PrevApprovals` is historical and is deliberately
 excluded from this tool's current approver results.
 
-For Planned Quota / Service Blueprint plans, `get_execution_plan_approvals` already returns
-eligible approvers alongside each approval status. Read the pending rows' `approvers`;
-`by` / `approvedBy` are past actors, not the people who can approve now. Use the status
-lookup first if the serviceTreeId, region, blueprint, or version is not yet known.
+For regional Execution Plans, `get_execution_plan_approvals` returns internal
+approval rows with `status: Pending` or `Approved`, plus a synthetic `type: CCO`
+row when orders are associated. Unlike the On-demand tool, plan rows do not have
+`pending` booleans. The CCO row includes order/sub-order statuses, messages and
+`replyPath`; it has no eligible-approver list. `by` / `approvedBy` are past actors.
+The plan summary uses persisted state; CCO order details are fetched live and may
+include per-order errors. Preserve those distinctions for the business resolver.
+Use status discovery when the four-part plan key is incomplete.
 
 ## Auth, and what a failure means
 
