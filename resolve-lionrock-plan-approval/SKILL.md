@@ -16,6 +16,13 @@ caller's reply contract, and [lionrock-mcp](../lionrock-mcp/SKILL.md) for live r
 
 ## Identify the exact plan
 
+In general explanations, `Action Required` is the portal display for an
+`Approvable` plan with a stored CCO order in `CommunicationNeeded`; the synthetic
+MCP CCO row also uses `ActionRequired`. The label alone proves neither an
+outstanding reviewer question nor that the requester owes the next reply.
+Explain both requester-response and pending-CCO-review possibilities until
+the actual sub-order messages establish which applies.
+
 An Execution Plan is keyed by `serviceTreeId + region + blueprint + version`.
 Preserve all four fields, including blueprint suffixes and the region's friendly
 name. Extract them from the supplied detail/review link. Regional `/all` and
