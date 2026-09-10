@@ -47,6 +47,11 @@ Quota fulfillment requests, including finding the plan on which a request depend
 
 ## Verify a reported retry or recovery
 
+In Loop, check `LOOP_ROLE` before choosing a source. `user` must use only permitted
+MCP and wiki reads, never Kusto or IcM, even when a script is readable or executable.
+Only `oncall` and `developer` may use the internal runtime sources below. The host
+uses its own access policy. An available credential does not grant the caller access.
+
 When the thread reports a retry, or current fields conflict with an earlier outcome,
 read the matching operation history before concluding how that attempt ended.
 Use the available MCP history tool for the request type. For On-demand requests,
@@ -96,8 +101,12 @@ link and the next step supported by that state. For an error question, give the
 actual exception and the explanation it supports, with internal details adapted
 to the caller's audience. Explain an original auto-completion as its recorded
 decision reason. It does not establish why that decision disagreed with actual
-access. A successful retry does not prove a transient fault, stale cache or stale
-records. State an unestablished cause plainly without adding a speculative diagnosis.
+access. Skipping fulfillment in one attempt does not establish that access was
+absent then, that no other process registered it, or that this caused the customer's
+failure. Do not call that decision a false positive without evidence of the actual
+access state at that time. A later registration or successful retry cannot establish
+the earlier access state. It does not prove or disprove a transient fault, stale cache
+or stale records. State an unestablished cause plainly without a speculative diagnosis.
 
 Lead with the current result and the requested, verified facts. A verified retry
 result remains useful when its original cause is unknown. Do not claim that no
@@ -106,10 +115,21 @@ resource creation now works without evidence for that claim. A customer recheck
 can be suggested as a check, not described as already successful. Never infer an
 ETA or recommend a blind retry.
 
-Before returning, check each factual claim against the exact field, operation or
-attributed thread message supporting it. Keep only the requester-facing answer,
-with the request link and material limits. Omit investigation narration, tool names,
-query details, confidence claims and promises of follow-up that was not arranged.
+For a recovered request, use this short answer structure:
+
+1. Link the request using the supplied or returned URL and state the verified current
+   result. If the retry was verified, give its completion time and recorded action.
+2. Explain any misleading old fields as historical values. Separate the recorded
+   decision from the unknown cause of the customer's earlier failure.
+3. State the remaining limit and a supported customer check, if needed. Stop there.
+
+Before returning, check every claim against the field, operation or attributed
+message supporting it. Remove causal phrases such as "which is why" when no evidence
+connects the events. Do not explain an empty lookup by inventing table semantics.
+The final response starts at step 1. Do not prepend "I verified", "here is the answer",
+"composing the reply", an evidence summary, or a separator before the actual answer.
+Omit tool names, query details, confidence claims and promises to investigate later
+unless a follow-up was actually arranged. Keep investigation notes outside final text.
 
 Return the answer through the caller; do not send a second message, retry, approve,
 change quota, or update an incident. A request to perform an action belongs to an
