@@ -72,8 +72,11 @@ when internal reads are permitted, read `OperationLog` through
   result with timestamps or actions remembered from the conversation.
 - A later successful `Complete` establishes completion in Lionrock. Report the
   completion time from that attempt's history, not the old `completedTime` field.
-  Registration operations establish the action recorded by the service, not that
-  the customer has successfully created a resource.
+  Registration operations establish the action recorded by the service at that
+  time. They do not establish the subscription's current access or feature state,
+  or that the customer has successfully created a resource. Without a fresh access
+  state read, say "the retry recorded registration of <feature> at <time>", never
+  "access is now enabled" or "the flag is now registered".
 - A colleague's message is evidence of what they reported. Attribute it when used.
   Their "likely transient" explanation is not a verified cause. If history is
   inaccessible to this role, give the permitted current state and clearly separate
@@ -142,13 +145,13 @@ ETA or recommend a blind retry.
 For a recovered request, keep the reply to three short paragraphs. Use this pattern,
 replacing placeholders only with verified facts and omitting inapplicable fields:
 
-> Request <full ID> is <current state>. Its latest retry completed in Lionrock at
-> <outcome time>, after <recorded action>.
+> Request <full ID> is <current request state>. The operation history records its
+> latest retry completing in Lionrock at <outcome time>, with <recorded action>.
 >
 > <Old fields> still describe the earlier <recorded decision>. The logs do not
 > establish the cause of the reported access problem.
 >
-> Lionrock completion does not confirm customer resource creation. Please check
+> These records do not confirm current subscription access or resource creation. Please check
 > <the reported operation>. If it still fails, provide the exact error and timestamp.
 
 Use the supplied or returned request URL when available, without inventing one.
