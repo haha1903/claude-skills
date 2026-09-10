@@ -1,6 +1,6 @@
 ---
 name: resolve-lionrock-request
-description: Use when someone asks for the status of a Lionrock On-demand or Planned Quota fulfillment request, why it is stuck, or why it failed. Explain the blocker or verified error and identify a dependent plan when needed. On-demand approval questions use resolve-lionrock-on-demand-approval; Execution Plan lifecycle and CCO questions use resolve-lionrock-plan-approval. Read-only.
+description: Use when someone asks for the status of a Lionrock On-demand or Planned Quota fulfillment request, whether a previous retry completed, why it is stuck, or why it failed. Explain the blocker or verified error and identify a dependent plan when needed. On-demand approval questions use resolve-lionrock-on-demand-approval; Execution Plan lifecycle and CCO questions use resolve-lionrock-plan-approval. Read-only.
 summary: Explain a Lionrock request state, blocker or failure
 handles: [Ask.RequestStatus, Ask.RequestError]
 ---
@@ -31,9 +31,12 @@ Quota fulfillment requests, including finding the plan on which a request depend
    When a request depends on a regional Execution Plan, resolve that plan's
    identifiers from the supplied link or returned lookup and pass the plan
    diagnosis to `resolve-lionrock-plan-approval`.
-3. Name the affected sub-request and quote its actual status, fulfillment channel,
-   relevant notes and timing. Parent completion does not establish every child
-   succeeded. `Notes` may describe admin cancellation or a replacement request.
+3. Read each relevant child's status, fulfillment channel, notes and timing separately.
+   Parent completion does not establish every child succeeded. `Notes` can describe
+   an earlier auto-completion, cancellation or replacement. After a retry, notes and
+   `completedTime` can still describe the original attempt while `fulfillChannel`
+   reflects the new one. Preserve the returned channel and resolve the timeline
+   before using an old note or timestamp to explain the current outcome.
 4. For pending On-demand approvals, use
    [resolve-lionrock-on-demand-approval](../resolve-lionrock-on-demand-approval/SKILL.md).
    If a Planned Quota request is blocked on its Execution Plan, use
@@ -41,6 +44,27 @@ Quota fulfillment requests, including finding the plan on which a request depend
    established plan identity. Preserve already-read evidence. If approval is
    complete, continue the request's execution investigation without routing back
    to the approval resolver for the same completed gate.
+
+## Verify a reported retry or recovery
+
+When the thread reports a retry, or current fields conflict with an earlier outcome,
+read the matching operation history before concluding how that attempt ended.
+Use the available MCP history tool for the request type. For On-demand requests,
+when internal reads are permitted, read `OperationLog` through
+[runtime evidence](references/runtime-evidence.md) and `kusto-query`.
+
+- Match the parent, child and environment. Find the latest relevant `Retry`, then
+  its subsequent operations, including any later failure or retry. A `Retry` entry
+  alone, an older `Complete`, or the current `Completed` status does not prove that
+  the retry succeeded. Incomplete history leaves the outcome unverified.
+- A later successful `Complete` establishes completion in Lionrock. Report the
+  completion time from that attempt's history, not the old `completedTime` field.
+  Registration operations establish the action recorded by the service, not that
+  the customer has successfully created a resource.
+- A colleague's message is evidence of what they reported. Attribute it when used.
+  Their "likely transient" explanation is not a verified cause. If history is
+  inaccessible to this role, give the permitted current state and clearly separate
+  the reported retry from an independently verified result. Do not bypass permissions.
 
 ## Explain a failure or an unexplained wait
 
@@ -70,7 +94,22 @@ an adequate answer, use the caller's `resolver_unavailable` operator-log contrac
 For a status question, give the live state and blocker with the relevant request
 link and the next step supported by that state. For an error question, give the
 actual exception and the explanation it supports, with internal details adapted
-to the caller's audience. Never infer an ETA or recommend a blind retry.
+to the caller's audience. Explain an original auto-completion as its recorded
+decision reason. It does not establish why that decision disagreed with actual
+access. A successful retry does not prove a transient fault, stale cache or stale
+records. State an unestablished cause plainly without adding a speculative diagnosis.
+
+Lead with the current result and the requested, verified facts. A verified retry
+result remains useful when its original cause is unknown. Do not claim that no
+additional access is needed, that propagation takes a particular time, or that
+resource creation now works without evidence for that claim. A customer recheck
+can be suggested as a check, not described as already successful. Never infer an
+ETA or recommend a blind retry.
+
+Before returning, check each factual claim against the exact field, operation or
+attributed thread message supporting it. Keep only the requester-facing answer,
+with the request link and material limits. Omit investigation narration, tool names,
+query details, confidence claims and promises of follow-up that was not arranged.
 
 Return the answer through the caller; do not send a second message, retry, approve,
 change quota, or update an incident. A request to perform an action belongs to an

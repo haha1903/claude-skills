@@ -79,9 +79,9 @@ Beyond the on-demand path, grouped by the question they answer:
 `.show external tables` lists all 46 if none of these fit — `Demand*`, `PfPlan*`,
 `Manatree` and the rest exist but have not come up in a support question yet.
 
-**`OperationLog` is where the error actually is.** `SubRequest.Notes` only carries
-cancellation reasons ("[CanceledByAdmin]..."), so a sub-request in `Error` with empty
-Notes looks like it failed for no reason. The exception lives in
+**Read `OperationLog` for the failing attempt.** `SubRequest.Notes` can carry
+auto-completion or cancellation reasons and can retain text from an earlier attempt.
+Empty Notes do not establish that no error was recorded. The exception can live in
 `OperationLog.Content` as JSON, under `Note`:
 
 ```kql
@@ -107,6 +107,28 @@ routing table that read "then the app log" is why the table now says `OperationL
 
 `OperationType` also shows who did what: `Retry` rows name the person, so "somebody
 already retried this twice" is one query away.
+
+### Verify a retry outcome
+
+Read the exact child's operations, including successful operations, not just errors:
+
+```kql
+external_table('OperationLog')
+| where ParentRequestId == <parent-id> and SubRequestId == <sub-request-id>
+| project OperationTime, OperationType, Operator, Content
+| order by OperationTime desc
+| take 100
+```
+
+Use the source for the requested environment. Inspect `Content` as well as the type.
+Find the latest relevant `Retry` and follow the later operations in time order.
+If the bounded result omits the retry or its outcome, extend the read before deciding.
+`Fulfill` or `RegisterAfecFlag` records progress. A subsequent successful `Complete`
+such as `Reason=CompleteByLionrockAutomation` establishes that Lionrock completed
+the attempt. Check for later retries, errors or cancellation before describing the
+current state. Neither completion nor flag registration proves customer resource
+creation or explains the original failure. Old auto-completion notes and an older
+`CompletedTime` cannot replace this attempt's history.
 
 **Waiting on something external?** `Ticket` says what. Every row observed is
 `Channel == "ADO"` (an RDQuota work item created by CM24), and `State` carries the real
