@@ -79,6 +79,22 @@ when internal reads are permitted, read `OperationLog` through
   inaccessible to this role, give the permitted current state and clearly separate
   the reported retry from an independently verified result. Do not bypass permissions.
 
+For permitted internal reads, use this query shape with the established parent and
+child IDs. It includes the latest Retry and its whole outcome window. Do not replace
+it with a fixed number of latest rows, which can omit the Retry, or truncate its
+output with `head`. If no Retry is returned, do not describe a verified retry.
+
+```kql
+let history = materialize(external_table('OperationLog')
+    | where ParentRequestId == <parent-id> and SubRequestId == <sub-request-id>);
+let retryTime = toscalar(history | where OperationType == 'Retry'
+    | summarize max(OperationTime));
+history
+| where isnull(retryTime) or OperationTime >= retryTime
+| project OperationTime, OperationType, Operator, Content
+| order by OperationTime asc
+```
+
 ## Explain a failure or an unexplained wait
 
 When the API state does not establish the cause and internal reads are permitted,
