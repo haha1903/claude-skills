@@ -65,6 +65,11 @@ when internal reads are permitted, read `OperationLog` through
   its subsequent operations, including any later failure or retry. A `Retry` entry
   alone, an older `Complete`, or the current `Completed` status does not prove that
   the retry succeeded. Incomplete history leaves the outcome unverified.
+- Re-read that `Retry` and its outcome in the current turn, even when they were
+  verified in an earlier turn. A query only for operations after the last known
+  completion can return no rows, but cannot revalidate that completion. Include
+  the claimed retry and outcome in the fresh query window. Do not fill an empty
+  result with timestamps or actions remembered from the conversation.
 - A later successful `Complete` establishes completion in Lionrock. Report the
   completion time from that attempt's history, not the old `completedTime` field.
   Registration operations establish the action recorded by the service, not that
