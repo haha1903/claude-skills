@@ -145,16 +145,17 @@ replacing placeholders only with verified facts and omitting inapplicable fields
 > Request <full ID> is <current state>. Its latest retry completed in Lionrock at
 > <outcome time>, after <recorded action>.
 >
-> <Old fields> still describe the earlier <recorded decision>. The available logs
-> do not establish why the customer's earlier <reported symptom> occurred.
+> <Old fields> still describe the earlier <recorded decision>. The logs do not
+> establish the cause of the reported access problem.
 >
 > Lionrock completion does not confirm customer resource creation. Please check
 > <the reported operation>. If it still fails, provide the exact error and timestamp.
 
 Use the supplied or returned request URL when available, without inventing one.
 Report an established cause when evidence actually proves it. Otherwise, keep the
-unknown-cause sentence above without adding a narrative that assumes historical
-access was absent. A child's completion or absence from the retry does not establish
+unknown-cause sentence above. Do not place the customer's symptom at the time of
+an earlier decision unless the thread or logs establish that timing. Do not add a
+narrative that assumes historical access was absent. A child's completion or absence from the retry does not establish
 that it was unrelated to the customer's failure. Do not describe a child as ruled
 out without evidence. Do not promise an investigation that was not arranged.
 
