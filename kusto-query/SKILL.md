@@ -10,6 +10,16 @@ summary: Run a KQL query against a Kusto cluster
 
 Query any Azure Data Explorer (Kusto) cluster with the signed-in `az` user's token. The primary path is the iris bin below; the raw `curl` REST calls are kept as a fallback for ad-hoc use.
 
+## Loop caller access
+
+All Loop roles, including `user`, may read internal Kusto data for diagnosis.
+Read `kb-data-sources` before querying. Use `bin/query.mjs`, which permits KQL
+queries and a small allowlist of read-only `.show` commands for ordinary users.
+Writes, ingestion and other management commands remain restricted to existing
+privileged workflows. Do not bypass the helper with raw REST, another script or
+an altered `LOOP_ROLE`. Never print credentials or dump the environment.
+The host without `LOOP_ROLE` retains its existing access policy.
+
 ## Run a query (primary path)
 
 ```bash
@@ -24,7 +34,7 @@ node ~/.claude/skills/kusto-query/bin/query.mjs --mgmt \
 
 Output is JSON `{cols, rows}` (pipe to `jq`). Auth is the signed-in `az` user — run `az login` first, and connect the VPN for internal clusters. The bin calls the iris SDK (`kusto.queryKusto` / `kusto.mgmtKusto`) through `_iris-shared`, auto-building iris on first run.
 
-## Raw REST (fallback)
+## Raw REST (host or authorized privileged workflows only)
 
 ## Authentication
 
@@ -76,10 +86,10 @@ Table | summarize dcount(ColumnName)
 // Cross-cluster query
 cluster('other.region.kusto.windows.net').database('DB').Table | take 10
 
-// Ingest from cross-cluster query
+// Authorized privileged workflows only: ingest from cross-cluster query
 .set-or-replace TargetTable <| cluster('source.kusto.windows.net').database('DB').SourceTable | ...
 
-// Create table
+// Authorized privileged workflows only: create table
 .create-merge table TableName (Col1: string, Col2: long, Col3: datetime)
 ```
 

@@ -50,10 +50,12 @@ Quota fulfillment requests, including finding the plan on which a request depend
 ## Verify a reported retry or recovery
 
 In Loop, read only the role with `printf '%s\n' "$LOOP_ROLE"` before choosing a source.
-Do not dump or search the environment, which contains credentials. `user` must use only permitted
-MCP and wiki reads, never Kusto or IcM, even when a script is readable or executable.
-Only `oncall` and `developer` may use the internal runtime sources below. The host
-uses its own access policy. An available credential does not grant the caller access.
+Do not dump or search the environment, which contains credentials. All Loop roles,
+including `user`, may query internal Kusto for request diagnostics. Read
+`kb-data-sources` and use `kusto-query/bin/query.mjs` for logs, operation history and
+read-only schema discovery. Ordinary users must not run Kusto writes or bypass the
+helper's management-command restriction. IcM operations, production retries and
+other writes retain their separate role requirements. The host uses its own access policy.
 
 When the thread reports a retry, or current fields conflict with an earlier outcome,
 read the matching operation history before concluding how that attempt ended.
@@ -116,8 +118,8 @@ schemas, `OperationLog` lookup, fulfillment-ticket links and environment traps.
   or TSG, then verify that condition against this request. A matching page title
   alone is not evidence.
 
-A restricted role must not invoke denied Kusto/IcM capabilities, run their scripts
-indirectly, or reconstruct those reads through another API. Answer from permitted
+A restricted role must not invoke denied capabilities, run their scripts
+indirectly, or reconstruct those operations through another API. Answer from permitted
 state and say exactly what could not be verified. If the missing capability prevents
 an adequate answer, use the caller's `resolver_unavailable` operator-log contract.
 

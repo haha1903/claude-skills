@@ -5,7 +5,7 @@
  *   query.mjs <cluster_url> <database> <kql>
  *   query.mjs --mgmt <cluster_url> <database> ".show tables"
  */
-import { kusto } from "../../_iris-shared/index.mjs";
+import { checkQueryAccess } from "../lib/query-policy.mjs";
 
 const args = process.argv.slice(2);
 const mgmt = args[0] === "--mgmt";
@@ -15,6 +15,8 @@ if (!cluster || !db || !text) {
   process.exit(2);
 }
 
+checkQueryAccess(mgmt, text, process.env.LOOP_ROLE);
+const { kusto } = await import("../../_iris-shared/index.mjs");
 const { cols, rows } = mgmt
   ? await kusto.mgmtKusto(cluster, db, text)
   : await kusto.queryKusto(cluster, db, text);
