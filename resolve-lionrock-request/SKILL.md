@@ -25,7 +25,9 @@ Quota fulfillment requests, including finding the plan on which a request depend
    inspect its relevant children; never assume sub-request 1. If no usable ID is
    available, request exactly that in the reply. Missing input is not missing
    resolver coverage.
-2. Use [lionrock-mcp](../lionrock-mcp/SKILL.md). Read its tool schemas, then use
+2. Read the current request state in every turn, including resumed conversations.
+   Fields from an earlier turn cannot support present-tense claims. Use
+   [lionrock-mcp](../lionrock-mcp/SKILL.md). Read its tool schemas, then use
    `get_request_status` for on-demand requests, or
    `get_planned_quota_request_status` and relevant history for planned quota.
    When a request depends on a regional Execution Plan, resolve that plan's
@@ -47,7 +49,8 @@ Quota fulfillment requests, including finding the plan on which a request depend
 
 ## Verify a reported retry or recovery
 
-In Loop, check `LOOP_ROLE` before choosing a source. `user` must use only permitted
+In Loop, read only the role with `printf '%s\n' "$LOOP_ROLE"` before choosing a source.
+Do not dump or search the environment, which contains credentials. `user` must use only permitted
 MCP and wiki reads, never Kusto or IcM, even when a script is readable or executable.
 Only `oncall` and `developer` may use the internal runtime sources below. The host
 uses its own access policy. An available credential does not grant the caller access.
@@ -119,9 +122,12 @@ For a recovered request, use this short answer structure:
 
 1. Link the request using the supplied or returned URL and state the verified current
    result. If the retry was verified, give its completion time and recorded action.
+   If no URL is supplied or returned, use the full request ID without inventing a link.
 2. Explain any misleading old fields as historical values. Separate the recorded
    decision from the unknown cause of the customer's earlier failure.
-3. State the remaining limit and a supported customer check, if needed. Stop there.
+3. State the remaining limit and a supported customer check, if needed. If the check
+   fails, ask for the exact error and timestamp. Do not promise that you or the team
+   will investigate later. Stop there.
 
 Before returning, check every claim against the field, operation or attributed
 message supporting it. Remove causal phrases such as "which is why" when no evidence
