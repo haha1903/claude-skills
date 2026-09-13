@@ -14951,9 +14951,10 @@ __export(azcli_exports, {
   buildAzArgs: () => buildAzArgs,
   parseAzJson: () => parseAzJson,
   runAzJson: () => runAzJson,
+  runAzJsonAsync: () => runAzJsonAsync,
   runAzTsv: () => runAzTsv
 });
-import { execFileSync as execFileSync2 } from "node:child_process";
+import { spawn, execFileSync as execFileSync2 } from "node:child_process";
 function buildAzArgs(args, output) {
   return [...args, "-o", output];
 }
@@ -14972,6 +14973,65 @@ function runAzJson(args, logFile) {
     logError(`az command failed: ${String(stderr).trim()}`);
     return null;
   }
+}
+function runAzJsonAsync(args, timeoutMs = 6e4) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new Error("az timeout must be positive");
+  return new Promise((resolve2) => {
+    let settled = false;
+    let bytes = 0;
+    const chunks = [];
+    const child = spawn("az", buildAzArgs(args, "json"), {
+      stdio: ["ignore", "pipe", "ignore"],
+      detached: process.platform !== "win32"
+    });
+    const stop = () => {
+      try {
+        if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL");
+        else child.kill("SIGKILL");
+      } catch {
+      }
+    };
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve2(value);
+    };
+    const timer = setTimeout(() => {
+      stop();
+      logError(`az command timed out after ${timeoutMs}ms`);
+      finish(null);
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      if (settled) return;
+      bytes += chunk.length;
+      if (bytes > 64 * 1024 * 1024) {
+        stop();
+        logError("az command exceeded output limit");
+        finish(null);
+      } else chunks.push(chunk);
+    });
+    child.on("error", (err) => {
+      stop();
+      logError(`az command failed (code=${err.code ?? "unknown"})`);
+      finish(null);
+    });
+    child.on("close", (code, signal) => {
+      if (settled) return;
+      if (code !== 0) {
+        stop();
+        logError(`az command failed (code=${code}, signal=${signal ?? "none"})`);
+        finish(null);
+        return;
+      }
+      try {
+        finish(parseAzJson(Buffer.concat(chunks).toString("utf8")));
+      } catch {
+        logError("az command returned invalid JSON");
+        finish(null);
+      }
+    });
+  });
 }
 function runAzTsv(args, logFile) {
   const full = buildAzArgs(args, "tsv");
@@ -27750,37 +27810,37 @@ var require_tls = __commonJS({
       ));
       return rval;
     };
-    var hmac_sha1 = function(key2, seqNum, record2) {
+    var hmac_sha1 = function(key2, seqNum, record3) {
       var hmac = forge2.hmac.create();
       hmac.start("SHA1", key2);
       var b = forge2.util.createBuffer();
       b.putInt32(seqNum[0]);
       b.putInt32(seqNum[1]);
-      b.putByte(record2.type);
-      b.putByte(record2.version.major);
-      b.putByte(record2.version.minor);
-      b.putInt16(record2.length);
-      b.putBytes(record2.fragment.bytes());
+      b.putByte(record3.type);
+      b.putByte(record3.version.major);
+      b.putByte(record3.version.minor);
+      b.putInt16(record3.length);
+      b.putBytes(record3.fragment.bytes());
       hmac.update(b.getBytes());
       return hmac.digest().getBytes();
     };
-    var deflate = function(c, record2, s) {
+    var deflate = function(c, record3, s) {
       var rval = false;
       try {
-        var bytes = c.deflate(record2.fragment.getBytes());
-        record2.fragment = forge2.util.createBuffer(bytes);
-        record2.length = bytes.length;
+        var bytes = c.deflate(record3.fragment.getBytes());
+        record3.fragment = forge2.util.createBuffer(bytes);
+        record3.length = bytes.length;
         rval = true;
       } catch (ex) {
       }
       return rval;
     };
-    var inflate = function(c, record2, s) {
+    var inflate = function(c, record3, s) {
       var rval = false;
       try {
-        var bytes = c.inflate(record2.fragment.getBytes());
-        record2.fragment = forge2.util.createBuffer(bytes);
-        record2.length = bytes.length;
+        var bytes = c.inflate(record3.fragment.getBytes());
+        record3.fragment = forge2.util.createBuffer(bytes);
+        record3.length = bytes.length;
         rval = true;
       } catch (ex) {
       }
@@ -27915,7 +27975,7 @@ var require_tls = __commonJS({
       }
       return rval;
     };
-    tls.handleUnexpected = function(c, record2) {
+    tls.handleUnexpected = function(c, record3) {
       var ignore = !c.open && c.entity === tls.ConnectionEnd.client;
       if (!ignore) {
         c.error(c, {
@@ -27928,7 +27988,7 @@ var require_tls = __commonJS({
         });
       }
     };
-    tls.handleHelloRequest = function(c, record2, length) {
+    tls.handleHelloRequest = function(c, record3, length) {
       if (!c.handshaking && c.handshakes > 0) {
         tls.queue(c, tls.createAlert(c, {
           level: tls.Alert.Level.warning,
@@ -27938,7 +27998,7 @@ var require_tls = __commonJS({
       }
       c.process();
     };
-    tls.parseHelloMessage = function(c, record2, length) {
+    tls.parseHelloMessage = function(c, record3, length) {
       var msg = null;
       var client = c.entity === tls.ConnectionEnd.client;
       if (length < 38) {
@@ -27951,7 +28011,7 @@ var require_tls = __commonJS({
           }
         });
       } else {
-        var b = record2.fragment;
+        var b = record3.fragment;
         var remaining = b.length();
         msg = {
           version: {
@@ -28062,8 +28122,8 @@ var require_tls = __commonJS({
         server_random: sRandom
       };
     };
-    tls.handleServerHello = function(c, record2, length) {
-      var msg = tls.parseHelloMessage(c, record2, length);
+    tls.handleServerHello = function(c, record3, length) {
+      var msg = tls.parseHelloMessage(c, record3, length);
       if (c.fail) {
         return;
       }
@@ -28093,8 +28153,8 @@ var require_tls = __commonJS({
       c.session.id = sessionId;
       c.process();
     };
-    tls.handleClientHello = function(c, record2, length) {
-      var msg = tls.parseHelloMessage(c, record2, length);
+    tls.handleClientHello = function(c, record3, length) {
+      var msg = tls.parseHelloMessage(c, record3, length);
       if (c.fail) {
         return;
       }
@@ -28179,7 +28239,7 @@ var require_tls = __commonJS({
       tls.flush(c);
       c.process();
     };
-    tls.handleCertificate = function(c, record2, length) {
+    tls.handleCertificate = function(c, record3, length) {
       if (length < 3) {
         return c.error(c, {
           message: "Invalid Certificate message. Message too short.",
@@ -28190,7 +28250,7 @@ var require_tls = __commonJS({
           }
         });
       }
-      var b = record2.fragment;
+      var b = record3.fragment;
       var msg = {
         certificate_list: readVector(b, 3)
       };
@@ -28238,7 +28298,7 @@ var require_tls = __commonJS({
       }
       c.process();
     };
-    tls.handleServerKeyExchange = function(c, record2, length) {
+    tls.handleServerKeyExchange = function(c, record3, length) {
       if (length > 0) {
         return c.error(c, {
           message: "Invalid key parameters. Only RSA is supported.",
@@ -28252,7 +28312,7 @@ var require_tls = __commonJS({
       c.expect = SCR;
       c.process();
     };
-    tls.handleClientKeyExchange = function(c, record2, length) {
+    tls.handleClientKeyExchange = function(c, record3, length) {
       if (length < 48) {
         return c.error(c, {
           message: "Invalid key parameters. Only RSA is supported.",
@@ -28263,7 +28323,7 @@ var require_tls = __commonJS({
           }
         });
       }
-      var b = record2.fragment;
+      var b = record3.fragment;
       var msg = {
         enc_pre_master_secret: readVector(b, 2).getBytes()
       };
@@ -28310,7 +28370,7 @@ var require_tls = __commonJS({
       }
       c.process();
     };
-    tls.handleCertificateRequest = function(c, record2, length) {
+    tls.handleCertificateRequest = function(c, record3, length) {
       if (length < 3) {
         return c.error(c, {
           message: "Invalid CertificateRequest. Message too short.",
@@ -28321,7 +28381,7 @@ var require_tls = __commonJS({
           }
         });
       }
-      var b = record2.fragment;
+      var b = record3.fragment;
       var msg = {
         certificate_types: readVector(b, 1),
         certificate_authorities: readVector(b, 2)
@@ -28330,7 +28390,7 @@ var require_tls = __commonJS({
       c.expect = SHD;
       c.process();
     };
-    tls.handleCertificateVerify = function(c, record2, length) {
+    tls.handleCertificateVerify = function(c, record3, length) {
       if (length < 2) {
         return c.error(c, {
           message: "Invalid CertificateVerify. Message too short.",
@@ -28341,7 +28401,7 @@ var require_tls = __commonJS({
           }
         });
       }
-      var b = record2.fragment;
+      var b = record3.fragment;
       b.read -= 4;
       var msgBytes = b.bytes();
       b.read += 4;
@@ -28372,7 +28432,7 @@ var require_tls = __commonJS({
       c.expect = CCC;
       c.process();
     };
-    tls.handleServerHelloDone = function(c, record2, length) {
+    tls.handleServerHelloDone = function(c, record3, length) {
       if (length > 0) {
         return c.error(c, {
           message: "Invalid ServerHelloDone message. Invalid length.",
@@ -28411,17 +28471,17 @@ var require_tls = __commonJS({
         }
       }
       if (c.session.certificateRequest !== null) {
-        record2 = tls.createRecord(c, {
+        record3 = tls.createRecord(c, {
           type: tls.ContentType.handshake,
           data: tls.createCertificate(c)
         });
-        tls.queue(c, record2);
+        tls.queue(c, record3);
       }
-      record2 = tls.createRecord(c, {
+      record3 = tls.createRecord(c, {
         type: tls.ContentType.handshake,
         data: tls.createClientKeyExchange(c)
       });
-      tls.queue(c, record2);
+      tls.queue(c, record3);
       c.expect = SER;
       var callback = function(c2, signature) {
         if (c2.session.certificateRequest !== null && c2.session.clientCertificate !== null) {
@@ -28449,8 +28509,8 @@ var require_tls = __commonJS({
       }
       tls.getClientSignature(c, callback);
     };
-    tls.handleChangeCipherSpec = function(c, record2) {
-      if (record2.fragment.getByte() !== 1) {
+    tls.handleChangeCipherSpec = function(c, record3) {
+      if (record3.fragment.getByte() !== 1) {
         return c.error(c, {
           message: "Invalid ChangeCipherSpec message received.",
           send: true,
@@ -28471,12 +28531,12 @@ var require_tls = __commonJS({
       c.expect = client ? SFI : CFI;
       c.process();
     };
-    tls.handleFinished = function(c, record2, length) {
-      var b = record2.fragment;
+    tls.handleFinished = function(c, record3, length) {
+      var b = record3.fragment;
       b.read -= 4;
       var msgBytes = b.bytes();
       b.read += 4;
-      var vd = record2.fragment.getBytes();
+      var vd = record3.fragment.getBytes();
       b = forge2.util.createBuffer();
       b.putBuffer(c.session.md5.digest());
       b.putBuffer(c.session.sha1.digest());
@@ -28519,8 +28579,8 @@ var require_tls = __commonJS({
       c.connected(c);
       c.process();
     };
-    tls.handleAlert = function(c, record2) {
-      var b = record2.fragment;
+    tls.handleAlert = function(c, record3) {
+      var b = record3.fragment;
       var alert = {
         level: b.getByte(),
         description: b.getByte()
@@ -28612,13 +28672,13 @@ var require_tls = __commonJS({
       });
       c.process();
     };
-    tls.handleHandshake = function(c, record2) {
-      var b = record2.fragment;
+    tls.handleHandshake = function(c, record3) {
+      var b = record3.fragment;
       var type = b.getByte();
       var length = b.getInt24();
       if (length > b.length()) {
-        c.fragmented = record2;
-        record2.fragment = forge2.util.createBuffer();
+        c.fragmented = record3;
+        record3.fragment = forge2.util.createBuffer();
         b.read -= 4;
         return c.process();
       }
@@ -28648,18 +28708,18 @@ var require_tls = __commonJS({
           c.session.md5.update(bytes);
           c.session.sha1.update(bytes);
         }
-        hsTable[c.entity][c.expect][type](c, record2, length);
+        hsTable[c.entity][c.expect][type](c, record3, length);
       } else {
-        tls.handleUnexpected(c, record2);
+        tls.handleUnexpected(c, record3);
       }
     };
-    tls.handleApplicationData = function(c, record2) {
-      c.data.putBuffer(record2.fragment);
+    tls.handleApplicationData = function(c, record3) {
+      c.data.putBuffer(record3.fragment);
       c.dataReady(c);
       c.process();
     };
-    tls.handleHeartbeat = function(c, record2) {
-      var b = record2.fragment;
+    tls.handleHeartbeat = function(c, record3) {
+      var b = record3.fragment;
       var type = b.getByte();
       var length = b.getInt16();
       var payload = b.getBytes(length);
@@ -28840,11 +28900,11 @@ var require_tls = __commonJS({
           macLength: 0,
           macFunction: null,
           cipherState: null,
-          cipherFunction: function(record2) {
+          cipherFunction: function(record3) {
             return true;
           },
           compressionState: null,
-          compressFunction: function(record2) {
+          compressFunction: function(record3) {
             return true;
           },
           updateSequenceNumber: function() {
@@ -28862,8 +28922,8 @@ var require_tls = __commonJS({
         read: createMode(),
         write: createMode()
       };
-      state.read.update = function(c2, record2) {
-        if (!state.read.cipherFunction(record2, state.read)) {
+      state.read.update = function(c2, record3) {
+        if (!state.read.cipherFunction(record3, state.read)) {
           c2.error(c2, {
             message: "Could not decrypt record or bad MAC.",
             send: true,
@@ -28875,7 +28935,7 @@ var require_tls = __commonJS({
               description: tls.Alert.Description.bad_record_mac
             }
           });
-        } else if (!state.read.compressFunction(c2, record2, state.read)) {
+        } else if (!state.read.compressFunction(c2, record3, state.read)) {
           c2.error(c2, {
             message: "Could not decompress record.",
             send: true,
@@ -28887,8 +28947,8 @@ var require_tls = __commonJS({
         }
         return !c2.fail;
       };
-      state.write.update = function(c2, record2) {
-        if (!state.write.compressFunction(c2, record2, state.write)) {
+      state.write.update = function(c2, record3) {
+        if (!state.write.compressFunction(c2, record3, state.write)) {
           c2.error(c2, {
             message: "Could not compress record.",
             send: false,
@@ -28897,7 +28957,7 @@ var require_tls = __commonJS({
               description: tls.Alert.Description.internal_error
             }
           });
-        } else if (!state.write.cipherFunction(record2, state.write)) {
+        } else if (!state.write.cipherFunction(record3, state.write)) {
           c2.error(c2, {
             message: "Could not encrypt record.",
             send: false,
@@ -28941,7 +29001,7 @@ var require_tls = __commonJS({
       if (!options.data) {
         return null;
       }
-      var record2 = {
+      var record3 = {
         type: options.type,
         version: {
           major: c.version.major,
@@ -28950,7 +29010,7 @@ var require_tls = __commonJS({
         length: options.data.length(),
         fragment: options.data
       };
-      return record2;
+      return record3;
     };
     tls.createAlert = function(c, alert) {
       var b = forge2.util.createBuffer();
@@ -29228,37 +29288,37 @@ var require_tls = __commonJS({
       rval.putBytes(forge2.random.getBytes(paddingLength));
       return rval;
     };
-    tls.queue = function(c, record2) {
-      if (!record2) {
+    tls.queue = function(c, record3) {
+      if (!record3) {
         return;
       }
-      if (record2.fragment.length() === 0) {
-        if (record2.type === tls.ContentType.handshake || record2.type === tls.ContentType.alert || record2.type === tls.ContentType.change_cipher_spec) {
+      if (record3.fragment.length() === 0) {
+        if (record3.type === tls.ContentType.handshake || record3.type === tls.ContentType.alert || record3.type === tls.ContentType.change_cipher_spec) {
           return;
         }
       }
-      if (record2.type === tls.ContentType.handshake) {
-        var bytes = record2.fragment.bytes();
+      if (record3.type === tls.ContentType.handshake) {
+        var bytes = record3.fragment.bytes();
         c.session.md5.update(bytes);
         c.session.sha1.update(bytes);
         bytes = null;
       }
       var records;
-      if (record2.fragment.length() <= tls.MaxFragment) {
-        records = [record2];
+      if (record3.fragment.length() <= tls.MaxFragment) {
+        records = [record3];
       } else {
         records = [];
-        var data = record2.fragment.bytes();
+        var data = record3.fragment.bytes();
         while (data.length > tls.MaxFragment) {
           records.push(tls.createRecord(c, {
-            type: record2.type,
+            type: record3.type,
             data: forge2.util.createBuffer(data.slice(0, tls.MaxFragment))
           }));
           data = data.slice(tls.MaxFragment);
         }
         if (data.length > 0) {
           records.push(tls.createRecord(c, {
-            type: record2.type,
+            type: record3.type,
             data: forge2.util.createBuffer(data)
           }));
         }
@@ -29273,11 +29333,11 @@ var require_tls = __commonJS({
     };
     tls.flush = function(c) {
       for (var i = 0; i < c.records.length; ++i) {
-        var record2 = c.records[i];
-        c.tlsData.putByte(record2.type);
-        c.tlsData.putByte(record2.version.major);
-        c.tlsData.putByte(record2.version.minor);
-        c.tlsData.putInt16(record2.fragment.length());
+        var record3 = c.records[i];
+        c.tlsData.putByte(record3.type);
+        c.tlsData.putByte(record3.version.major);
+        c.tlsData.putByte(record3.version.minor);
+        c.tlsData.putInt16(record3.fragment.length());
         c.tlsData.putBuffer(c.records[i].fragment);
       }
       c.records = [];
@@ -29512,13 +29572,13 @@ var require_tls = __commonJS({
         c.state.current = tls.createConnectionState(c);
       };
       c.reset();
-      var _update = function(c2, record2) {
-        var aligned = record2.type - tls.ContentType.change_cipher_spec;
+      var _update = function(c2, record3) {
+        var aligned = record3.type - tls.ContentType.change_cipher_spec;
         var handlers = ctTable[c2.entity][c2.expect];
         if (aligned in handlers) {
-          handlers[aligned](c2, record2);
+          handlers[aligned](c2, record3);
         } else {
-          tls.handleUnexpected(c2, record2);
+          tls.handleUnexpected(c2, record3);
         }
       };
       var _readRecordHeader = function(c2) {
@@ -29786,13 +29846,13 @@ var require_aesCipherSuites = __commonJS({
       state.read.macLength = state.write.macLength = sp.mac_length;
       state.read.macFunction = state.write.macFunction = tls.hmac_sha1;
     }
-    function encrypt_aes_cbc_sha1(record2, s) {
+    function encrypt_aes_cbc_sha1(record3, s) {
       var rval = false;
-      var mac2 = s.macFunction(s.macKey, s.sequenceNumber, record2);
-      record2.fragment.putBytes(mac2);
+      var mac2 = s.macFunction(s.macKey, s.sequenceNumber, record3);
+      record3.fragment.putBytes(mac2);
       s.updateSequenceNumber();
       var iv;
-      if (record2.version.minor === tls.Versions.TLS_1_0.minor) {
+      if (record3.version.minor === tls.Versions.TLS_1_0.minor) {
         iv = s.cipherState.init ? null : s.cipherState.iv;
       } else {
         iv = forge2.random.getBytesSync(16);
@@ -29800,13 +29860,13 @@ var require_aesCipherSuites = __commonJS({
       s.cipherState.init = true;
       var cipher = s.cipherState.cipher;
       cipher.start({ iv });
-      if (record2.version.minor >= tls.Versions.TLS_1_1.minor) {
+      if (record3.version.minor >= tls.Versions.TLS_1_1.minor) {
         cipher.output.putBytes(iv);
       }
-      cipher.update(record2.fragment);
+      cipher.update(record3.fragment);
       if (cipher.finish(encrypt_aes_cbc_sha1_padding)) {
-        record2.fragment = cipher.output;
-        record2.length = record2.fragment.length();
+        record3.fragment = cipher.output;
+        record3.length = record3.fragment.length();
         rval = true;
       }
       return rval;
@@ -29832,31 +29892,31 @@ var require_aesCipherSuites = __commonJS({
       }
       return rval;
     }
-    function decrypt_aes_cbc_sha1(record2, s) {
+    function decrypt_aes_cbc_sha1(record3, s) {
       var rval = false;
       var iv;
-      if (record2.version.minor === tls.Versions.TLS_1_0.minor) {
+      if (record3.version.minor === tls.Versions.TLS_1_0.minor) {
         iv = s.cipherState.init ? null : s.cipherState.iv;
       } else {
-        iv = record2.fragment.getBytes(16);
+        iv = record3.fragment.getBytes(16);
       }
       s.cipherState.init = true;
       var cipher = s.cipherState.cipher;
       cipher.start({ iv });
-      cipher.update(record2.fragment);
+      cipher.update(record3.fragment);
       rval = cipher.finish(decrypt_aes_cbc_sha1_padding);
       var macLen = s.macLength;
       var mac2 = forge2.random.getBytesSync(macLen);
       var len = cipher.output.length();
       if (len >= macLen) {
-        record2.fragment = cipher.output.getBytes(len - macLen);
+        record3.fragment = cipher.output.getBytes(len - macLen);
         mac2 = cipher.output.getBytes(macLen);
       } else {
-        record2.fragment = cipher.output.getBytes();
+        record3.fragment = cipher.output.getBytes();
       }
-      record2.fragment = forge2.util.createBuffer(record2.fragment);
-      record2.length = record2.fragment.length();
-      var mac22 = s.macFunction(s.macKey, s.sequenceNumber, record2);
+      record3.fragment = forge2.util.createBuffer(record3.fragment);
+      record3.length = record3.fragment.length();
+      var mac22 = s.macFunction(s.macKey, s.sequenceNumber, record3);
       s.updateSequenceNumber();
       rval = compareMacs(s.macKey, mac2, mac22) && rval;
       return rval;
@@ -43790,6 +43850,7 @@ __export(bridge_exports, {
   loadPrivateKey: () => loadPrivateKey,
   packCache: () => packCache,
   pubFingerprint: () => pubFingerprint,
+  relayPoll: () => relayPoll,
   reqName: () => reqName,
   serveKvBridge: () => serveKvBridge,
   signRequest: () => signRequest,
@@ -43886,25 +43947,25 @@ function loadAuthorized(directory = DEFAULT_AUTHORIZED_DIR) {
   }
   return out;
 }
-function kvSet(vault, name4, value, tags) {
+async function kvSet(vault, name4, value, tags, timeoutMs) {
   const args = ["keyvault", "secret", "set", "--vault-name", vault, "--name", name4, "--value", value];
   if (tags) {
     args.push("--tags", ...Object.entries(tags).map(([k, v]) => `${k}=${v}`));
   }
-  if (runAzJson(args) === null) throw new Error(`kv set failed: ${name4}`);
+  if (await runAzJsonAsync(args, timeoutMs) === null) throw new Error(`kv set failed: ${name4}`);
 }
-function kvGet(vault, name4) {
-  const d = runAzJson(["keyvault", "secret", "show", "--vault-name", vault, "--name", name4]);
+async function kvGet(vault, name4, timeoutMs) {
+  const d = await runAzJsonAsync(["keyvault", "secret", "show", "--vault-name", vault, "--name", name4], timeoutMs);
   if (!d) return null;
   return { value: d.value ?? "", tags: d.tags ?? {} };
 }
-function kvList(vault) {
-  const d = runAzJson(["keyvault", "secret", "list", "--vault-name", vault]);
+async function kvList(vault) {
+  const d = await runAzJsonAsync(["keyvault", "secret", "list", "--vault-name", vault]);
   if (!Array.isArray(d)) return [];
   return d.filter((s) => s.attributes?.enabled ?? true).map((s) => s.name);
 }
-function kvConsume(vault, name4) {
-  kvSet(vault, name4, CONSUMED);
+async function kvConsume(vault, name4, timeoutMs) {
+  await kvSet(vault, name4, CONSUMED, void 0, timeoutMs);
 }
 function resolveVault(vault) {
   const v = vault ?? process.env[DEFAULT_VAULT_ENV];
@@ -43918,20 +43979,43 @@ function signedRequest(priv, kid, resource, client, method) {
   return JSON.stringify({ state: "request", kid, resource, client, method, ts, nonce, sig });
 }
 async function requestViaKv(o, resource, client, method) {
+  const key = JSON.stringify([resolveVault(o.vault), o.privkeyPath ?? process.env[PRIVKEY_ENV], resource, client, method]);
+  let pending = pendingRequests.get(key);
+  if (!pending) {
+    pending = exchangeViaKv(o, resource, client, method).finally(() => {
+      pendingRequests.delete(key);
+    });
+    pendingRequests.set(key, pending);
+  }
+  let timer;
+  try {
+    return await Promise.race([pending, new Promise((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(`kv bridge timed out after ${o.timeout ?? 120}s for ${method} (is the relay running?)`)), (o.timeout ?? 120) * 1e3);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function exchangeViaKv(o, resource, client, method) {
   const timeout = o.timeout ?? 120;
   const poll = (o.poll ?? 2) * 1e3;
   const v = resolveVault(o.vault);
   const priv = loadPrivateKey(o.privkeyPath);
   const kid = pubFingerprint(crypto5.createPublicKey(priv));
   const name4 = reqName(resource, client);
-  const post = () => kvSet(v, name4, signedRequest(priv, kid, resource, client, method));
-  post();
   const deadline = Date.now() + timeout * 1e3;
+  const remaining = () => {
+    const ms = deadline - Date.now();
+    if (ms <= 0) throw new Error(`kv bridge timed out after ${timeout}s for ${method} (is the relay running?)`);
+    return Math.min(6e4, ms);
+  };
+  const post = () => kvSet(v, name4, signedRequest(priv, kid, resource, client, method), void 0, remaining());
+  await post();
   while (Date.now() < deadline) {
-    await sleep2(poll);
-    const cur = kvGet(v, name4);
+    await sleep2(Math.min(poll, remaining()));
+    const cur = await kvGet(v, name4, remaining());
     if (!cur) {
-      post();
+      await post();
       continue;
     }
     let env;
@@ -43943,22 +44027,22 @@ async function requestViaKv(o, resource, client, method) {
     if (env.state !== "ready") continue;
     if (env.enc) {
       const payload = decryptToken(priv, env.enc);
-      kvConsume(v, name4);
+      await kvConsume(v, name4, remaining());
       return payload;
     }
     if (typeof env.shards === "number") {
-      const payload = readShards(v, name4, env.shards, priv);
-      kvConsume(v, name4);
-      for (let i = 1; i <= env.shards; i++) kvConsume(v, `${name4}-p${i}`);
+      const payload = await readShards(v, name4, env.shards, priv, remaining);
+      await kvConsume(v, name4, remaining());
+      for (let i = 1; i <= env.shards; i++) await kvConsume(v, `${name4}-p${i}`, remaining());
       return payload;
     }
   }
   throw new Error(`kv bridge timed out after ${timeout}s for ${method} (is the relay running?)`);
 }
-function readShards(vault, name4, shards, priv) {
+async function readShards(vault, name4, shards, priv, remaining) {
   const parts = [];
   for (let i = 1; i <= shards; i++) {
-    const shard = kvGet(vault, `${name4}-p${i}`);
+    const shard = await kvGet(vault, `${name4}-p${i}`, remaining());
     let env;
     if (!shard) throw new Error(`kv bridge: missing shard ${name4}-p${i} of ${shards}`);
     try {
@@ -44033,27 +44117,27 @@ function authenticateRequest(env, allow, seenNonces) {
   if (seenNonces.has(nonce)) return false;
   return verifyRequest(pub, env.resource, env.client, env.method ?? "broker", ts, nonce, sig);
 }
-function writePayload(name4, pub, payload, kvSetFn, tags) {
+async function writePayload(name4, pub, payload, kvSetFn, tags) {
   const enc = encryptToken(pub, payload);
   if (enc.length <= SHARD_CAP) {
-    kvSetFn(name4, JSON.stringify({ state: "ready", enc }), tags);
+    await kvSetFn(name4, JSON.stringify({ state: "ready", enc }), tags);
     return;
   }
   const chunks = chunkString(payload, SHARD_LEN);
-  chunks.forEach((chunk, i) => {
-    kvSetFn(`${name4}-p${i + 1}`, JSON.stringify({ state: "shard", enc: encryptToken(pub, chunk) }));
-  });
-  kvSetFn(name4, JSON.stringify({ state: "ready", shards: chunks.length }), tags);
+  for (let i = 0; i < chunks.length; i++) {
+    await kvSetFn(`${name4}-p${i + 1}`, JSON.stringify({ state: "shard", enc: encryptToken(pub, chunks[i]) }));
+  }
+  await kvSetFn(name4, JSON.stringify({ state: "ready", shards: chunks.length }), tags);
 }
 async function processSecret(vault, name4, allow, seenNonces) {
-  const cur = kvGet(vault, name4);
+  const cur = await kvGet(vault, name4);
   if (!cur) return;
   const env = JSON.parse(cur.value);
   const state = env.state;
   if (state === "request") {
     if (!authenticateRequest(env, allow, seenNonces)) {
       logError(`kv relay: rejected request ${name4} (kid=${String(env.kid)})`);
-      kvConsume(vault, name4);
+      await kvConsume(vault, name4);
       return;
     }
     const method = env.method ?? "broker";
@@ -44066,11 +44150,11 @@ async function processSecret(vault, name4, allow, seenNonces) {
       const exp = tokenExpiry(payload);
       if (exp) tags = { exp: String(exp) };
     }
-    writePayload(name4, allow.get(env.kid), payload, (n, v, t) => kvSet(vault, n, v, t), tags);
+    await writePayload(name4, allow.get(env.kid), payload, (n, v, t) => kvSet(vault, n, v, t), tags);
     seenNonces.set(env.nonce, env.ts);
   } else if (state === "ready") {
     const exp = Number(cur.tags.exp ?? "0") || 0;
-    if (exp && exp < nowSec()) kvConsume(vault, name4);
+    if (exp && exp < nowSec()) await kvConsume(vault, name4);
   }
 }
 async function keepAliveHostCache() {
@@ -44084,6 +44168,29 @@ async function keepAliveHostCache() {
     logError(`agent365 host cache keep-alive error: ${e.message}`);
   }
 }
+async function relayPoll(a) {
+  const now = a.now ?? (() => Date.now());
+  let lastKeepAlive = a.lastKeepAlive;
+  try {
+    for (const name4 of await a.list()) {
+      if (!name4.startsWith("req-")) continue;
+      try {
+        await a.handle(name4);
+      } catch (ex) {
+        logError(`kv relay: ${name4}: ${ex.message}`);
+      }
+    }
+    const cutoff = nowSec() - REQUEST_SKEW;
+    for (const [n, ts] of [...a.seenNonces]) if (ts < cutoff) a.seenNonces.delete(n);
+    if (now() - lastKeepAlive >= (a.keepAliveMs ?? KEEPALIVE_MS)) {
+      lastKeepAlive = now();
+      await (a.keepAlive ?? keepAliveHostCache)();
+    }
+  } catch (ex) {
+    logError(`kv relay: poll failed, retrying in ${a.pollMs / 1e3}s: ${ex.message}`);
+  }
+  return lastKeepAlive;
+}
 async function serveKvBridge(o = {}) {
   const v = resolveVault(o.vault);
   const allow = loadAuthorized(o.authorizedDir ?? DEFAULT_AUTHORIZED_DIR);
@@ -44092,27 +44199,20 @@ async function serveKvBridge(o = {}) {
   const seenNonces = /* @__PURE__ */ new Map();
   let lastKeepAlive = 0;
   for (; ; ) {
-    for (const name4 of kvList(v)) {
-      if (!name4.startsWith("req-")) continue;
-      try {
-        await processSecret(v, name4, allow, seenNonces);
-      } catch (ex) {
-        logError(`kv relay: ${name4}: ${ex.message}`);
-      }
-    }
-    const cutoff = nowSec() - REQUEST_SKEW;
-    for (const [n, ts] of [...seenNonces]) if (ts < cutoff) seenNonces.delete(n);
-    if (Date.now() - lastKeepAlive >= KEEPALIVE_MS) {
-      lastKeepAlive = Date.now();
-      await keepAliveHostCache();
-    }
+    lastKeepAlive = await relayPoll({
+      list: () => kvList(v),
+      handle: (name4) => processSecret(v, name4, allow, seenNonces),
+      seenNonces,
+      lastKeepAlive,
+      pollMs: poll
+    });
     await sleep2(poll);
   }
 }
 function sleep2(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
-var DEFAULT_VAULT_ENV, DEFAULT_AUTHORIZED_DIR, PRIVKEY_ENV, REQUEST_SKEW, SHARD_CAP, SHARD_LEN, CONSUMED, KEEPALIVE_MS;
+var DEFAULT_VAULT_ENV, DEFAULT_AUTHORIZED_DIR, PRIVKEY_ENV, REQUEST_SKEW, SHARD_CAP, SHARD_LEN, CONSUMED, pendingRequests, KEEPALIVE_MS;
 var init_bridge = __esm({
   "src/bridge.ts"() {
     "use strict";
@@ -44126,6 +44226,7 @@ var init_bridge = __esm({
     SHARD_CAP = 25600;
     SHARD_LEN = 16384;
     CONSUMED = JSON.stringify({ state: "consumed" });
+    pendingRequests = /* @__PURE__ */ new Map();
     KEEPALIVE_MS = 24 * 3600 * 1e3;
   }
 });
@@ -47412,9 +47513,28 @@ var require_utils2 = __commonJS({
     "use strict";
     var isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
     var isIPv4 = RegExp.prototype.test.bind(/^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u);
+    var isPort = RegExp.prototype.test.bind(/^\d*$/u);
     var isHexPair = RegExp.prototype.test.bind(/^[\da-f]{2}$/iu);
     var isUnreserved = RegExp.prototype.test.bind(/^[\da-z\-._~]$/iu);
-    var isPathCharacter = RegExp.prototype.test.bind(/^[\da-z\-._~!$&'()*+,;=:@/]$/iu);
+    var isPathCharacter = RegExp.prototype.test.bind(/^[A-Za-z0-9\-._~!$&'()*+,;=:@/]$/u);
+    var isQueryFragmentCharacter = RegExp.prototype.test.bind(/^[A-Za-z0-9\-._~!$&'()*+,;=:@/?]$/u);
+    var isUserinfoCharacter = RegExp.prototype.test.bind(/^[A-Za-z0-9\-._~!$&'()*+,;=:]$/u);
+    var BYTE_HEX = new Array(256);
+    {
+      const HEX_DIGITS = "0123456789ABCDEF";
+      for (let i = 0; i < 256; i++) {
+        BYTE_HEX[i] = "%" + HEX_DIGITS[i >> 4] + HEX_DIGITS[i & 15];
+      }
+    }
+    function percentEncodeNonAscii(cp) {
+      if (cp < 2048) {
+        return BYTE_HEX[192 | cp >> 6] + BYTE_HEX[128 | cp & 63];
+      }
+      if (cp < 65536) {
+        return BYTE_HEX[224 | cp >> 12] + BYTE_HEX[128 | cp >> 6 & 63] + BYTE_HEX[128 | cp & 63];
+      }
+      return BYTE_HEX[240 | cp >> 18] + BYTE_HEX[128 | cp >> 12 & 63] + BYTE_HEX[128 | cp >> 6 & 63] + BYTE_HEX[128 | cp & 63];
+    }
     function stringArrayToHexStripped(input) {
       let acc = "";
       let code = 0;
@@ -47439,91 +47559,105 @@ var require_utils2 = __commonJS({
       }
       return acc;
     }
+    var isHextet = RegExp.prototype.test.bind(/^[\dA-Fa-f]{1,4}$/);
+    var isIPvFuture = RegExp.prototype.test.bind(/^[vV][\dA-Fa-f]+\.[A-Za-z\d\-._~!$&'()*+,;=:]+$/);
+    var isZoneCharacter = RegExp.prototype.test.bind(/^[A-Za-z\d\-._~]$/);
     var nonSimpleDomain = RegExp.prototype.test.bind(/[^!"$&'()*+,\-.;=_`a-z{}~]/u);
-    function consumeIsZone(buffer) {
-      buffer.length = 0;
-      return true;
-    }
-    function consumeHextets(buffer, address, output) {
-      if (buffer.length) {
-        const hex = stringArrayToHexStripped(buffer);
-        if (hex !== "") {
-          address.push(hex);
-        } else {
-          output.error = true;
-          return false;
+    function isZoneIdentifier(zone) {
+      if (zone.length === 0) return false;
+      for (let i = 0; i < zone.length; i++) {
+        if (isZoneCharacter(zone[i])) continue;
+        if (zone[i] === "%" && i + 2 < zone.length && isHexPair(zone.slice(i + 1, i + 3))) {
+          i += 2;
+          continue;
         }
-        buffer.length = 0;
+        return false;
       }
       return true;
     }
-    function getIPV6(input) {
-      let tokenCount = 0;
-      const output = { error: false, address: "", zone: "" };
-      const address = [];
-      const buffer = [];
-      let endipv6Encountered = false;
-      let endIpv6 = false;
-      let consume = consumeHextets;
-      for (let i = 0; i < input.length; i++) {
-        const cursor = input[i];
-        if (cursor === "[" || cursor === "]") {
-          continue;
-        }
-        if (cursor === ":") {
-          if (endipv6Encountered === true) {
-            endIpv6 = true;
+    function compressIPv6ZeroRun(hextets) {
+      let bestStart = -1;
+      let bestLength = 0;
+      let runStart = -1;
+      let runLength = 0;
+      for (let i = 0; i < hextets.length; i++) {
+        if (hextets[i] === "0") {
+          if (runStart === -1) runStart = i;
+          runLength++;
+          if (runLength > bestLength) {
+            bestLength = runLength;
+            bestStart = runStart;
           }
-          if (!consume(buffer, address, output)) {
-            break;
-          }
-          if (++tokenCount > 7) {
-            output.error = true;
-            break;
-          }
-          if (i > 0 && input[i - 1] === ":") {
-            endipv6Encountered = true;
-          }
-          address.push(":");
-          continue;
-        } else if (cursor === "%") {
-          if (!consume(buffer, address, output)) {
-            break;
-          }
-          consume = consumeIsZone;
         } else {
-          buffer.push(cursor);
-          continue;
+          runStart = -1;
+          runLength = 0;
         }
       }
-      if (buffer.length) {
-        if (consume === consumeIsZone) {
-          output.zone = buffer.join("");
-        } else if (endIpv6) {
-          address.push(buffer.join(""));
-        } else {
-          address.push(stringArrayToHexStripped(buffer));
-        }
+      if (bestLength < 2) return hextets.join(":");
+      const head = hextets.slice(0, bestStart).join(":");
+      const tail = hextets.slice(bestStart + bestLength).join(":");
+      return head + "::" + tail;
+    }
+    function normalizeIPv6Address(input) {
+      const compression = input.indexOf("::");
+      if (compression !== -1 && input.indexOf("::", compression + 1) !== -1) return void 0;
+      const left = compression === -1 ? input.split(":") : input.slice(0, compression).split(":");
+      const right = compression === -1 ? [] : input.slice(compression + 2).split(":");
+      if (compression !== -1) {
+        if (left.length === 1 && left[0] === "") left.length = 0;
+        if (right.length === 1 && right[0] === "") right.length = 0;
       }
-      output.address = address.join("");
-      return output;
+      const parts = left.concat(right);
+      let hextetCount = 0;
+      for (let i = 0; i < parts.length; i++) {
+        const part = parts[i];
+        if (part === "") return void 0;
+        if (part.indexOf(".") !== -1) {
+          if (i !== parts.length - 1 || compression !== -1 && right.length === 0 || !isIPv4(part)) return void 0;
+          hextetCount += 2;
+          continue;
+        }
+        if (!isHextet(part)) return void 0;
+        parts[i] = parseInt(part, 16).toString(16);
+        hextetCount++;
+      }
+      if (compression === -1) {
+        if (hextetCount !== 8) return void 0;
+        return compressIPv6ZeroRun(parts);
+      }
+      if (hextetCount >= 8) return void 0;
+      const expanded = parts.slice(0, left.length);
+      for (let i = hextetCount; i < 8; i++) expanded.push("0");
+      for (let i = left.length; i < parts.length; i++) expanded.push(parts[i]);
+      return compressIPv6ZeroRun(expanded);
     }
     function normalizeIPv6(host) {
-      if (findToken(host, ":") < 2) {
-        return { host, isIPV6: false };
+      const bracketed = host[0] === "[" && host[host.length - 1] === "]";
+      const hasBracket = host[0] === "[" || host[host.length - 1] === "]";
+      if (hasBracket && !bracketed) return { host, isIPV6: false, error: true };
+      let input = bracketed ? host.slice(1, -1) : host;
+      if (bracketed && isIPvFuture(input)) {
+        input = input.toLowerCase();
+        return { host: `[${input}]`, escapedHost: input, isIPV6: false, isIPVFuture: true };
       }
-      const ipv62 = getIPV6(host);
-      if (!ipv62.error) {
-        let newHost = ipv62.address;
-        let escapedHost = ipv62.address;
-        if (ipv62.zone) {
-          newHost += "%" + ipv62.zone;
-          escapedHost += "%25" + ipv62.zone;
-        }
-        return { host: newHost, isIPV6: true, escapedHost };
-      } else {
-        return { host, isIPV6: false };
+      if (findToken(input, ":") < 2) {
+        return { host, isIPV6: false, error: bracketed };
       }
+      let zoneIdentifier = "";
+      const zoneSeparator = input.indexOf("%");
+      if (zoneSeparator !== -1) {
+        const separatorLength = input.slice(zoneSeparator, zoneSeparator + 3).toLowerCase() === "%25" ? 3 : 1;
+        zoneIdentifier = input.slice(zoneSeparator + separatorLength);
+        if (!isZoneIdentifier(zoneIdentifier)) return { host, isIPV6: false, error: true };
+        input = input.slice(0, zoneSeparator);
+      }
+      const address = normalizeIPv6Address(input);
+      if (address === void 0) return { host, isIPV6: false, error: true };
+      return {
+        host: address + (zoneIdentifier ? "%" + zoneIdentifier : ""),
+        escapedHost: address + (zoneIdentifier ? "%25" + zoneIdentifier : ""),
+        isIPV6: true
+      };
     }
     function findToken(str, token) {
       let ind = 0;
@@ -47642,7 +47776,8 @@ var require_utils2 = __commonJS({
     function normalizePathEncoding(input) {
       let output = "";
       for (let i = 0; i < input.length; i++) {
-        if (input[i] === "%" && i + 2 < input.length) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
           const hex = input.slice(i + 1, i + 3);
           if (isHexPair(hex)) {
             const normalizedHex = hex.toUpperCase();
@@ -47656,10 +47791,152 @@ var require_utils2 = __commonJS({
             continue;
           }
         }
-        if (isPathCharacter(input[i])) {
-          output += input[i];
+        if (isPathCharacter(ch)) {
+          output += ch;
         } else {
-          output += escape(input[i]);
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += isEscapeSafe(code) ? ch : BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
+        }
+      }
+      return output;
+    }
+    function serializePathEncoding(input, pathNoScheme = false) {
+      let output = "";
+      let firstSegment = pathNoScheme && input[0] !== "/";
+      for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            output += "%" + hex.toUpperCase();
+            i += 2;
+            continue;
+          }
+        }
+        if (ch === "/") {
+          firstSegment = false;
+        }
+        if (isPathCharacter(ch) && (ch !== ":" || !firstSegment)) {
+          output += ch;
+        } else {
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
+        }
+      }
+      return output;
+    }
+    function encodeComponent(input, isAllowed) {
+      let output = "";
+      for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            output += "%" + hex.toUpperCase();
+            i += 2;
+            continue;
+          }
+        }
+        if (isAllowed(ch)) {
+          output += ch;
+        } else {
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
+        }
+      }
+      return output;
+    }
+    function encodeUserinfo(input) {
+      return encodeComponent(input, isUserinfoCharacter);
+    }
+    function encodeQuery(input) {
+      return encodeComponent(input, isQueryFragmentCharacter);
+    }
+    function encodeFragment(input) {
+      return encodeComponent(input, isQueryFragmentCharacter);
+    }
+    function isEscapeSafe(cp) {
+      return cp >= 48 && cp <= 57 || cp >= 65 && cp <= 90 || cp >= 97 && cp <= 122 || cp === 42 || cp === 43 || cp === 45 || cp === 46 || cp === 47 || cp === 64 || cp === 95;
+    }
+    function normalizeQueryFragmentEncoding(input) {
+      let output = "";
+      for (let i = 0; i < input.length; i++) {
+        const ch = input[i];
+        if (ch === "%" && i + 2 < input.length) {
+          const hex = input.slice(i + 1, i + 3);
+          if (isHexPair(hex)) {
+            const normalizedHex = hex.toUpperCase();
+            const decoded = String.fromCharCode(parseInt(normalizedHex, 16));
+            if (isUnreserved(decoded)) {
+              output += decoded;
+            } else {
+              output += "%" + normalizedHex;
+            }
+            i += 2;
+            continue;
+          }
+        }
+        if (isQueryFragmentCharacter(ch)) {
+          output += ch;
+        } else {
+          const code = input.charCodeAt(i);
+          if (code < 128) {
+            output += isEscapeSafe(code) ? ch : BYTE_HEX[code];
+          } else if (code < 55296 || code > 57343) {
+            output += percentEncodeNonAscii(code);
+          } else if (code <= 56319 && i + 1 < input.length) {
+            const low = input.charCodeAt(i + 1);
+            if (low >= 56320 && low <= 57343) {
+              output += percentEncodeNonAscii(65536 + (code - 55296 << 10) + (low - 56320));
+              i++;
+            } else {
+              output += percentEncodeNonAscii(65533);
+            }
+          } else {
+            output += percentEncodeNonAscii(65533);
+          }
         }
       }
       return output;
@@ -47682,14 +47959,18 @@ var require_utils2 = __commonJS({
     function recomposeAuthority(component) {
       const uriTokens = [];
       if (component.userinfo !== void 0) {
-        uriTokens.push(component.userinfo);
+        uriTokens.push(encodeUserinfo(component.userinfo));
         uriTokens.push("@");
       }
       if (component.host !== void 0) {
-        let host = unescape(component.host);
+        let host = component.host;
         if (!isIPv4(host)) {
-          const ipV6res = normalizeIPv6(host);
-          if (ipV6res.isIPV6 === true) {
+          let ipV6res = normalizeIPv6(host);
+          if (ipV6res.isIPV6 !== true && ipV6res.isIPVFuture !== true) {
+            host = normalizePercentEncoding(host, true);
+            ipV6res = normalizeIPv6(host);
+          }
+          if (ipV6res.isIPV6 === true || ipV6res.isIPVFuture === true) {
             host = `[${ipV6res.escapedHost}]`;
           } else {
             host = reescapeHostDelimiters(host, false);
@@ -47698,8 +47979,12 @@ var require_utils2 = __commonJS({
         uriTokens.push(host);
       }
       if (typeof component.port === "number" || typeof component.port === "string") {
+        const port = String(component.port);
+        if (!isPort(port)) {
+          throw new TypeError("URI port is malformed.");
+        }
         uriTokens.push(":");
-        uriTokens.push(String(component.port));
+        uriTokens.push(port);
       }
       return uriTokens.length ? uriTokens.join("") : void 0;
     }
@@ -47709,6 +47994,11 @@ var require_utils2 = __commonJS({
       reescapeHostDelimiters,
       normalizePercentEncoding,
       normalizePathEncoding,
+      serializePathEncoding,
+      normalizeQueryFragmentEncoding,
+      encodeUserinfo,
+      encodeQuery,
+      encodeFragment,
       escapePreservingEscapes,
       removeDotSegments,
       isIPv4,
@@ -47724,7 +48014,7 @@ var require_schemes = __commonJS({
   "node_modules/fast-uri/lib/schemes.js"(exports, module) {
     "use strict";
     var { isUUID } = require_utils2();
-    var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
+    var URN_REG = /^([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-./:;=@]|%[\da-f]{2})+)$/iu;
     var supportedSchemeNames = (
       /** @type {const} */
       [
@@ -47785,9 +48075,10 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path9, query] = wsComponent.resourceName.split("?");
+        const queryIndex = wsComponent.resourceName.indexOf("?");
+        const path9 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
         wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
-        wsComponent.query = query;
+        wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
       wsComponent.fragment = void 0;
@@ -47799,7 +48090,7 @@ var require_schemes = __commonJS({
         return urnComponent;
       }
       const matches = urnComponent.path.match(URN_REG);
-      if (matches) {
+      if (matches && matches[0] === urnComponent.path) {
         const scheme = options.scheme || urnComponent.scheme || "urn";
         urnComponent.nid = matches[1].toLowerCase();
         urnComponent.nss = matches[2];
@@ -47933,8 +48224,17 @@ var require_schemes = __commonJS({
 var require_fast_uri = __commonJS({
   "node_modules/fast-uri/index.js"(exports, module) {
     "use strict";
-    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, escapePreservingEscapes, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils2();
+    var { normalizeIPv6, removeDotSegments, recomposeAuthority, normalizePercentEncoding, normalizePathEncoding, serializePathEncoding, normalizeQueryFragmentEncoding, encodeQuery, encodeFragment, reescapeHostDelimiters, isIPv4, nonSimpleDomain } = require_utils2();
     var { SCHEMES, getSchemeHandler } = require_schemes();
+    var VALID_SCHEME = /^[A-Za-z][A-Za-z0-9+.-]*$/u;
+    var MALFORMED_SCHEME_ERROR = "URI scheme is malformed.";
+    function decodeValidScheme(scheme) {
+      const decodedScheme = unescape(String(scheme));
+      if (!VALID_SCHEME.test(decodedScheme)) {
+        throw new TypeError(MALFORMED_SCHEME_ERROR);
+      }
+      return decodedScheme;
+    }
     function normalize(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
@@ -47947,12 +48247,34 @@ var require_fast_uri = __commonJS({
     }
     function resolve2(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
-      const { parsed: baseParsed, malformedAuthorityOrPort: baseMalformed } = parseWithStatus(baseURI, schemelessOptions);
-      const { parsed: relativeParsed, malformedAuthorityOrPort: relativeMalformed } = parseWithStatus(relativeURI, schemelessOptions);
-      if (baseMalformed || relativeMalformed) {
+      const {
+        parsed: baseParsed,
+        malformedAuthorityOrPort: baseMalformed,
+        malformedPercentEncoding: baseMalformedPercentEncoding,
+        malformedSchemeSpecific: baseMalformedSchemeSpecific,
+        malformedHost: baseMalformedHost,
+        malformedScheme: baseMalformedScheme
+      } = parseWithStatus(baseURI, schemelessOptions);
+      const {
+        parsed: relativeParsed,
+        malformedAuthorityOrPort: relativeMalformed,
+        malformedPercentEncoding: relativeMalformedPercentEncoding,
+        malformedSchemeSpecific: relativeMalformedSchemeSpecific,
+        malformedHost: relativeMalformedHost,
+        malformedScheme: relativeMalformedScheme
+      } = parseWithStatus(relativeURI, schemelessOptions);
+      if (baseMalformed || relativeMalformed || baseMalformedPercentEncoding || relativeMalformedPercentEncoding || baseMalformedSchemeSpecific || relativeMalformedSchemeSpecific || baseMalformedHost || relativeMalformedHost || baseMalformedScheme || relativeMalformedScheme) {
         throw new Error(baseParsed.error || relativeParsed.error || "URI is malformed.");
       }
       const resolved = resolveComponent(baseParsed, relativeParsed, schemelessOptions, true);
+      const resolvedSchemeHandler = getSchemeHandler(options && options.scheme || resolved.scheme);
+      const resolvedHost = resolved.host;
+      const resolvedHostIsIP = resolvedHost !== void 0 && resolvedHost !== "" && (isIPv4(resolvedHost) || normalizeIPv6(resolvedHost).isIPV6);
+      canonicalizeHost(resolved, options || {}, resolvedSchemeHandler, resolvedHostIsIP);
+      const encodedASCIIHost = resolvedHost && resolvedHost.indexOf("%") !== -1 && !/\P{ASCII}/u.test(resolvedHost);
+      if (resolved.error && !encodedASCIIHost) {
+        throw new Error(resolved.error);
+      }
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
@@ -48012,7 +48334,7 @@ var require_fast_uri = __commonJS({
     function equal(uriA, uriB, options) {
       const normalizedA = normalizeComparableURI(uriA, options);
       const normalizedB = normalizeComparableURI(uriB, options);
-      return normalizedA !== void 0 && normalizedB !== void 0 && normalizedA.toLowerCase() === normalizedB.toLowerCase();
+      return normalizedA !== void 0 && normalizedB !== void 0 && normalizedA === normalizedB;
     }
     function serialize(cmpts, opts) {
       const component = {
@@ -48033,19 +48355,22 @@ var require_fast_uri = __commonJS({
       };
       const options = Object.assign({}, opts);
       const uriTokens = [];
+      if (component.scheme) {
+        component.scheme = decodeValidScheme(component.scheme);
+      }
       const schemeHandler = getSchemeHandler(options.scheme || component.scheme);
       if (schemeHandler && schemeHandler.serialize) schemeHandler.serialize(component, options);
+      const hasAuthority = component.userinfo !== void 0 || component.host !== void 0 || component.port !== void 0;
+      const pathNoScheme = !options.skipEscape && component.scheme === void 0 && !hasAuthority;
       if (component.path !== void 0) {
         if (!options.skipEscape) {
-          component.path = escapePreservingEscapes(component.path);
-          if (component.scheme !== void 0) {
-            component.path = component.path.split("%3A").join(":");
-          }
+          component.path = serializePathEncoding(component.path, pathNoScheme);
         } else {
           component.path = normalizePercentEncoding(component.path);
         }
       }
       if (options.reference !== "suffix" && component.scheme) {
+        component.scheme = decodeValidScheme(component.scheme);
         uriTokens.push(component.scheme, ":");
       }
       const authority = recomposeAuthority(component);
@@ -48063,16 +48388,19 @@ var require_fast_uri = __commonJS({
         if (!options.absolutePath && (!schemeHandler || !schemeHandler.absolutePath)) {
           s = removeDotSegments(s);
         }
+        if (pathNoScheme) {
+          s = serializePathEncoding(s, true);
+        }
         if (authority === void 0 && s[0] === "/" && s[1] === "/") {
           s = "/%2F" + s.slice(2);
         }
         uriTokens.push(s);
       }
       if (component.query !== void 0) {
-        uriTokens.push("?", component.query);
+        uriTokens.push("?", encodeQuery(component.query));
       }
       if (component.fragment !== void 0) {
-        uriTokens.push("#", component.fragment);
+        uriTokens.push("#", encodeFragment(component.fragment));
       }
       return uriTokens.join("");
     }
@@ -48088,6 +48416,35 @@ var require_fast_uri = __commonJS({
       }
       return void 0;
     }
+    function hasMalformedPercentEncoding(component) {
+      if (component === void 0) return false;
+      let percent = component.indexOf("%");
+      while (percent !== -1) {
+        if (percent + 2 >= component.length || !/^[\da-f]{2}$/iu.test(component.slice(percent + 1, percent + 3))) {
+          return true;
+        }
+        percent = component.indexOf("%", percent + 3);
+      }
+      return false;
+    }
+    function isIPLiteral(host) {
+      return host[0] === "[" && host[host.length - 1] === "]";
+    }
+    function hasMalformedComponentPercentEncoding(matches) {
+      const host = matches[4];
+      return hasMalformedPercentEncoding(matches[3]) || host !== void 0 && !isIPLiteral(host) && hasMalformedPercentEncoding(host) || hasMalformedPercentEncoding(matches[6]) || hasMalformedPercentEncoding(matches[7]) || hasMalformedPercentEncoding(matches[8]);
+    }
+    function canonicalizeHost(parsed, options, schemeHandler, isIP) {
+      if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport) && parsed.host && !isIPLiteral(parsed.host) && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
+        try {
+          parsed.host = new URL("http://" + parsed.host).hostname;
+        } catch (e) {
+          parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
+          return true;
+        }
+      }
+      return false;
+    }
     function parseWithStatus(uri, opts) {
       const options = Object.assign({}, opts);
       const parsed = {
@@ -48100,6 +48457,11 @@ var require_fast_uri = __commonJS({
         fragment: void 0
       };
       let malformedAuthorityOrPort = false;
+      let malformedPercentEncoding = false;
+      let malformedSchemeSpecific = false;
+      let malformedHost = false;
+      let malformedIPLiteral = false;
+      let malformedScheme = false;
       let isIP = false;
       if (options.reference === "suffix") {
         if (options.scheme) {
@@ -48136,6 +48498,19 @@ var require_fast_uri = __commonJS({
         parsed.path = matches[6] || "";
         parsed.query = matches[7];
         parsed.fragment = matches[8];
+        if (parsed.scheme !== void 0) {
+          const decodedScheme = unescape(parsed.scheme);
+          if (VALID_SCHEME.test(decodedScheme)) {
+            parsed.scheme = decodedScheme.toLowerCase();
+          } else {
+            parsed.error = parsed.error || MALFORMED_SCHEME_ERROR;
+            malformedScheme = true;
+          }
+        }
+        malformedPercentEncoding = hasMalformedComponentPercentEncoding(matches);
+        if (malformedPercentEncoding) {
+          parsed.error = parsed.error || "URI contains malformed percent-encoding.";
+        }
         if (isNaN(parsed.port)) {
           parsed.port = matches[5];
         }
@@ -48147,9 +48522,16 @@ var require_fast_uri = __commonJS({
         if (parsed.host) {
           const ipv4result = isIPv4(parsed.host);
           if (ipv4result === false) {
+            const bracketedIPLiteral = isIPLiteral(parsed.host);
+            const hasIPLiteralBracket = parsed.host.indexOf("[") !== -1 || parsed.host.indexOf("]") !== -1;
             const ipv6result = normalizeIPv6(parsed.host);
-            parsed.host = ipv6result.host.toLowerCase();
-            isIP = ipv6result.isIPV6;
+            isIP = ipv6result.isIPV6 || ipv6result.isIPVFuture === true;
+            malformedIPLiteral = hasIPLiteralBracket && (!bracketedIPLiteral || ipv6result.error === true);
+            parsed.host = isIP ? ipv6result.host : ipv6result.host.toLowerCase();
+            if (malformedIPLiteral) {
+              parsed.error = parsed.error || "URI host is malformed.";
+              malformedAuthorityOrPort = true;
+            }
           } else {
             isIP = true;
           }
@@ -48167,42 +48549,36 @@ var require_fast_uri = __commonJS({
           parsed.error = parsed.error || "URI is not a " + options.reference + " reference.";
         }
         const schemeHandler = getSchemeHandler(options.scheme || parsed.scheme);
-        if (!options.unicodeSupport && (!schemeHandler || !schemeHandler.unicodeSupport)) {
-          if (parsed.host && (options.domainHost || schemeHandler && schemeHandler.domainHost) && isIP === false && nonSimpleDomain(parsed.host)) {
-            try {
-              parsed.host = new URL("http://" + parsed.host).hostname;
-            } catch (e) {
-              parsed.error = parsed.error || "Host's domain name can not be converted to ASCII: " + e;
-            }
-          }
+        if (!malformedIPLiteral) {
+          malformedHost = canonicalizeHost(parsed, options, schemeHandler, isIP);
         }
         if (!schemeHandler || schemeHandler && !schemeHandler.skipNormalize) {
           if (uri.indexOf("%") !== -1) {
-            if (parsed.scheme !== void 0) {
-              parsed.scheme = unescape(parsed.scheme);
-            }
-            if (parsed.host !== void 0) {
-              parsed.host = reescapeHostDelimiters(unescape(parsed.host), isIP);
+            if (parsed.host !== void 0 && !malformedIPLiteral) {
+              const host = isIP ? parsed.host : normalizePercentEncoding(parsed.host, true);
+              parsed.host = reescapeHostDelimiters(host, isIP);
             }
           }
           if (parsed.path) {
             parsed.path = normalizePathEncoding(parsed.path);
           }
+          if (parsed.query) {
+            parsed.query = normalizeQueryFragmentEncoding(parsed.query);
+          }
           if (parsed.fragment) {
-            try {
-              parsed.fragment = encodeURI(decodeURIComponent(parsed.fragment));
-            } catch {
-              parsed.error = parsed.error || "URI malformed";
-            }
+            parsed.fragment = normalizeQueryFragmentEncoding(parsed.fragment);
           }
         }
         if (schemeHandler && schemeHandler.parse) {
           schemeHandler.parse(parsed, options);
+          if (schemeHandler === SCHEMES.urn && parsed.nid === void 0) {
+            malformedSchemeSpecific = true;
+          }
         }
       } else {
         parsed.error = parsed.error || "URI can not be parsed.";
       }
-      return { parsed, malformedAuthorityOrPort };
+      return { parsed, malformedAuthorityOrPort, malformedPercentEncoding, malformedSchemeSpecific, malformedHost, malformedScheme };
     }
     function parse3(uri, opts) {
       return parseWithStatus(uri, opts).parsed;
@@ -48211,20 +48587,28 @@ var require_fast_uri = __commonJS({
       return normalizeStringWithStatus(uri, opts).normalized;
     }
     function normalizeStringWithStatus(uri, opts) {
-      const { parsed, malformedAuthorityOrPort } = parseWithStatus(uri, opts);
+      const { parsed, malformedAuthorityOrPort, malformedPercentEncoding, malformedSchemeSpecific, malformedHost, malformedScheme } = parseWithStatus(uri, opts);
       return {
-        normalized: malformedAuthorityOrPort ? uri : serialize(parsed, opts),
-        malformedAuthorityOrPort
+        normalized: malformedAuthorityOrPort || malformedPercentEncoding || malformedSchemeSpecific || malformedHost || malformedScheme ? uri : serialize(parsed, opts),
+        malformedAuthorityOrPort,
+        malformedPercentEncoding,
+        malformedSchemeSpecific,
+        malformedHost,
+        malformedScheme
       };
     }
     function normalizeComparableURI(uri, opts) {
-      if (typeof uri === "string") {
-        const { normalized, malformedAuthorityOrPort } = normalizeStringWithStatus(uri, opts);
-        return malformedAuthorityOrPort ? void 0 : normalized;
+      if (typeof uri !== "string" && typeof uri !== "object") {
+        return void 0;
       }
-      if (typeof uri === "object") {
-        return serialize(uri, opts);
+      let value;
+      try {
+        value = typeof uri === "string" ? uri : serialize(uri, opts);
+      } catch {
+        return void 0;
       }
+      const { normalized, malformedAuthorityOrPort, malformedPercentEncoding, malformedSchemeSpecific, malformedHost, malformedScheme } = normalizeStringWithStatus(value, opts);
+      return malformedAuthorityOrPort || malformedPercentEncoding || malformedSchemeSpecific || malformedHost || malformedScheme ? void 0 : normalized;
     }
     var fastUri = {
       SCHEMES,
@@ -69184,6 +69568,10 @@ var TeamsFacade = class {
   GetTeam(args) {
     return this.client.callTool("GetTeam", args);
   }
+  /** Get information about the members of a Microsoft Teams team. Returns id, displayName, roles and visibleHistoryStartDateTime. Prerequisite: Call ListTeams first to obtain a valid teamId GUID — this tool requires a system-retrieved teamId and cannot accept team names or fabricated IDs. */
+  ListTeamMembers(args) {
+    return this.client.callTool("ListTeamMembers", args);
+  }
   /** Get details of a specific Teams chat by ID. Returns the chat's id, topic, chatType (oneOnOne/group), createdDateTime, and lastUpdatedDateTime. Prerequisite: Obtain chatId from ListChats if unknown. */
   GetChat(args) {
     return this.client.callTool("GetChat", args);
@@ -69466,6 +69854,278 @@ var GraphFacade = class {
   }
 };
 
+// src/agent365/generated/sharepoint.ts
+var SharePointFacade = class {
+  constructor(client) {
+    this.client = client;
+  }
+  client;
+  /** Updates an existing COLUMN in a SharePoint LIST. SharePoint Hierarchy - You are updating at the COLUMN level: - SITE (e.g., 'HR Hiring Test') ← Parent site - └── LIST (e.g., 'Job Openings') ← Parent list -       └── COLUMNS (schema definition) ← This tool updates a column here === TOOL PARAMETERS === Required:   - siteId: ID of the SharePoint site containing the list   - listId: ID of the SharePoint list containing the column   - columnId: ID of the column to update Optional:   - description: New description for the column   - displayName: New display name shown in UI   - hidden: Hide column from views (true/false)   - required: Make column required (true/false)   - columnType: Type of column being updated (required when providing columnProperties)   - columnProperties: Type-specific settings as List<KeyValuePair<string, string>> === TYPICAL WORKFLOW === 1. User asks to 'add Cancelled option to Status column in Job Openings list' 2. First: searchSitesByName('HR Hiring Test') → get siteId 3. Second: listLists(siteId) → find 'Job Openings' list → get listId 4. Third: listColumns(siteId, listId) → find 'Status' column → get columnId 5. Fourth: Use THIS tool with siteId + listId + columnId + columnType + columnProperties === UPDATABLE PROPERTIES BY COLUMN TYPE === 1. 'text' - Single line of text    Properties: { "maxLength": "255" } 2. 'note' / 'multilineText' - Multiple lines of text    Properties: {      "allowMultipleLines": "true",      "textType": "plain" | "richText" | "enhancedRichText",      "maxLength": "63999",      "appendChangesToExistingText": "false"    } 3. 'number' - Numeric values    Properties: { "minimum": "0", "maximum": "100", "decimalPlaces": "2", "displayAs": "number" | "percentage" } 4. 'integer' - Whole numbers only    Properties: { "minimum": "0", "maximum": "1000" } 5. 'currency' - Money values    Properties: { "locale": "en-US" } 6. 'dateTime' - Date and time values    Properties: { "format": "dateOnly" | "dateTime", "displayAs": "default" | "friendly" | "standard" } 7. 'boolean' - Yes/No checkbox    Properties: {} (no additional options) 8. 'choice' - Single selection    Properties: { "choices": "[\"Opt1\", \"Opt2\"]", "displayAs": "dropDownMenu" | "radioButtons" } 9. 'multichoice' - Multiple selection    Properties: { "choices": "[\"Opt1\", \"Opt2\"]", "displayAs": "checkBoxes" } 10. 'lookup' - Reference to another list    Properties: { "allowMultipleValues": "true", "allowUnlimitedLength": "false" } 11. 'user' / 'personOrGroup' - User/group picker     Properties: { "allowMultipleSelection": "true", "format": "peopleOnly" | "peopleAndGroups" }     (the MS Graph name "chooseFromType" is also accepted and mapped to "format") 12. 'url' / 'hyperlinkOrPicture' - URL/link field     Properties: { "isPicture": "false" } 13. 'calculated' - Computed field (REQUIRED: formula)     Properties: { "formula": "=[Col1]+[Col2]", "outputType": "text" | "number" | "dateTime" | "boolean" | "currency" } 14. 'term' / 'multiterm' - Managed metadata     Properties: { "showFullyQualifiedName": "true" } === EXAMPLE TOOL REQUESTS === Example 1 - Update choice column to add new options:   updateColumn(     siteId: "contoso.sharepoint.com,abc123,def456",     listId: "7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e",     columnId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",     columnType: "choice",     columnProperties: [{ Key: "choices", Value: "[\"New\", \"In Progress\", \"Done\", \"Cancelled\"]" }]   ) Example 2 - Update number column range:   updateColumn(     siteId: "contoso.sharepoint.com,abc123,def456",     listId: "7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e",     columnId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",     columnType: "number",     columnProperties: [{ Key: "minimum", Value: "0" }, { Key: "maximum", Value: "50000" }]   ) Example 3 - Update display name and make required:   updateColumn(     siteId: "contoso.sharepoint.com,abc123,def456",     listId: "7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e",     columnId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",     displayName: "Job Title",     required: true   ) === RETURNS === Updated column with its metadata on success.  */
+  updateColumn(args) {
+    return this.client.callTool("updateColumn", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Enumerates files and folders (DriveItems) contained within a specified parent folder in a Document Library (also referred to as a Drive). Pagination: Returns up to 20 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. */
+  getFolderChildren(args) {
+    return this.client.callTool("getFolderChildren", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Get metadata of a file or a folder (also referred to as DriveItems) from a specified Document Library (also referred to as a Drive) in SharePoint. */
+  getFileOrFolderMetadata(args) {
+    return this.client.callTool("getFileOrFolderMetadata", args);
+  }
+  /** Creates a new SharePoint LIST within a site. SharePoint Hierarchy - You are creating at the LIST level: - SITE (e.g., 'HR Hiring Test') ← Parent container - └── LIST (e.g., 'Job Openings') ← This tool creates a new list here -       └── ITEMS (individual records) Parameters:     Required:         - siteId: The ID of the site where the list will be created         - displayName: The name of the list to create Typical Workflow:     1. User asks to 'create a list called Job Openings in HR site'     2. First: findSite('HR') → get siteId     3. Second: Use THIS tool with siteId + displayName to create the list Returns:     Newly created SharePoint List on success NOTE: After creating the list, you can add items using other list tools or add columns via SharePoint UI. */
+  createList(args) {
+    return this.client.callTool("createList", args);
+  }
+  /** Delete an ITEM (row/record) from a SharePoint LIST. SharePoint Hierarchy - You are deleting at the ITEMS level: - SITE (e.g., 'HR Hiring Test') - └── LIST (e.g., 'Job Openings') -       └── ITEMS -> This tool deletes an item here Requires:     siteId: The site containing the list     listId: The specific list containing the item     itemId: The specific item to delete Optional:     etag: The ETag value for concurrency control (required to prevent overwriting concurrent changes)     permanentDelete: When false (default), the item is moved to the site RECYCLE BIN and can be restored later. When true, the item is PERMANENTLY deleted and cannot be recovered. By default this recycles the item (recoverable); set permanentDelete=true only when the caller explicitly asks for permanent, irreversible deletion. Typical Workflow:     1. User asks to 'delete Sales Intern from Job Openings list'     2. First: Search for the parent site (e.g., 'HR Hiring Test') -> get siteId     3. Second: listLists(siteId) -> find 'Job Openings' list -> get listId     4. Third: listListItems(siteId, listId) -> find 'Sales Intern' item -> get itemId and etag     5. Fourth: Use THIS tool with siteId + listId + itemId + etag to delete the item NOTE: Determine from context whether a mentioned name refers to a SITE or a LIST. Lists are containers within sites (e.g., 'Job Openings', 'Contacts', 'Tasks'). If the user specifies both a site and list, use the site name to get siteId first. Never use site search tools to find list names - lists must be found within their parent site. */
+  deleteListItem(args) {
+    return this.client.callTool("deleteListItem", args);
+  }
+  /** Updates an existing ITEM (row/record) in a SharePoint LIST. SharePoint Hierarchy - You are updating at the ITEMS level: - SITE (e.g., 'HR Hiring Test') ← Parent site - └── LIST (e.g., 'Job Openings') ← Parent list -       └── ITEMS (individual records) ← This tool updates an existing item here Parameters:     Required:         - siteId: The ID of the site containing the list         - listId: The ID of the list containing the item         - itemId: The ID of the specific item to update         - fields: Key-value pairs representing column names and their new values     Optional:- etag: ETag value for optimistic concurrency control Typical Workflow:     1. User asks to 'update the Software Engineer job opening salary to 150000'     2. First: searchSitesByName('HR Hiring Test') → get siteId     3. Second: listLists(siteId) → find 'Job Openings' list → get listId     4. Third: listListItems(siteId, listId) → find 'Software Engineer' item → get itemId and etag     5. Fourth: Use THIS tool with siteId + listId + itemId + fields + etag to update the item Returns:     Updated list item fields on success NOTE: Only the fields provided will be updated; other fields remain unchanged.  */
+  updateListItem(args) {
+    return this.client.callTool("updateListItem", args);
+  }
+  /** Get metadata of a file or a folder (also referred to as DriveItems) from a sharing URL or a Vroom/Graph drive item API URL (e.g. .../_api/v2.0/drives/{driveId}/items/{itemId}).Only users with existing explicit permissions to access the file will be allowed to get the metadata of the file. */
+  getFileOrFolderMetadataByUrl(args) {
+    return this.client.callTool("getFileOrFolderMetadataByUrl", args);
+  }
+  /** Resolve a SharePoint site using its EXACT hostname and server-relative path. Use this tool ONLY when you have the complete site URL structure (e.g., hostname='contoso.sharepoint.com' and path='sites/Marketing'). DO NOT use this tool when the user provides only a site NAME - use findSite instead. This tool requires precise URL components and will fail if hostname or path are incorrect. */
+  getSiteByPath(args) {
+    return this.client.callTool("getSiteByPath", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive. Set the sensitivity label of a file (specified by the fileId also called driveItemId) from the specified Document Library (also referred to as a Drive). Before calling, verify the file extension is supported. Supported Office formats: doc, docx, docm, dot, dotx, dotm, xls, xlt, xla, xlc, xlm, xlw, xlsx, xltx, xlsm, xltm, xlam, xlsb, ppt, pot, pps, ppa, pptx, ppsx, pptm, potx, potm, ppsm, ppam. Supported when enabled for the tenant: pdf, one, mp4, fluid, loop, note, whiteboard, wbtx, loot, loopsug, page, dsn, board. Do NOT call for unsupported extensions such as txt, html, csv, jpg, png, zip, or other file types not listed above — the call will fail. */
+  setSensitivityLabelOnFile(args) {
+    return this.client.callTool("setSensitivityLabelOnFile", args);
+  }
+  /** Find Sharepoint Sites accessible to the user.This tool can either find specific site based on a search query you pass itOr find the top 20 relevant sites accesible by the user if you don't pass it a search query. Pagination: Returns up to 20 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. */
+  findSite(args) {
+    return this.client.callTool("findSite", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Create a new folder (represented as a DriveItem) within a specified Document Library (also referred to as a Drive) as a child of the specified parent folder. */
+  createFolder(args) {
+    return this.client.callTool("createFolder", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Delete a file or a folder (also referred to as DriveItems) from a specified Document Library (also referred to as a Drive). */
+  deleteFileOrFolder(args) {
+    return this.client.callTool("deleteFileOrFolder", args);
+  }
+  /** Gets list of all Columns from a SharePoint LIST. SharePoint Hierarchy - You are querying at the COLUMN level: - SITE (e.g., 'HR Hiring Test') ← Parent site - └── LIST (e.g., 'Job Openings') ← Parent list -       └── COLUMNS (schema definition) ← This tool retrieves these Parameters:     Required:         - siteId: The ID of the site containing the list         - listId: The ID of the list to get columns from Typical Workflow:     1. User asks 'what columns are in the Job Openings list?'     2. First: searchSitesByName('HR Hiring Test') → get siteId     3. Second: listLists(siteId) → find 'Job Openings' list → get listId     4. Third: Use THIS tool with siteId + listId to get all columns Returns:     List of column definitions including column ID, name, type, and properties on success */
+  listColumns(args) {
+    return this.client.callTool("listColumns", args);
+  }
+  /** Delete a SharePoint LIST from a SITE. SharePoint Hierarchy - You are deleting at the LIST level: - SITE (e.g., 'HR Hiring Test') - └── LIST (e.g., 'Job Openings') → This tool deletes a list here -     └── ITEMS (individual records) Requires:     siteId: The site containing the list     listId: The specific list to delete Optional:     etag: The ETag value for concurrency control (required to prevent overwriting concurrent changes) Typical Workflow:     1. User asks to 'delete the Job Openings list from HR Hiring Test site'     2. First: searchSitesByName('HR Hiring Test') → get siteId     3. Second: listLists(siteId) → find 'Job Openings' list → get listId and etag     4. Third: Use THIS tool with siteId + listId + etag to delete the list NOTE: This deletes the entire list container and all items within it. To delete individual items, use deleteListItem instead. */
+  deleteList(args) {
+    return this.client.callTool("deleteList", args);
+  }
+  /** Creates a new ITEM (row/record) in a SharePoint LIST. SharePoint Hierarchy - You are creating at the ITEMS level: - SITE (e.g., 'HR Hiring Test') ← Parent site - └── LIST (e.g., 'Job Openings') ← Parent list -       └── ITEMS (individual records) ← This tool creates a new item here Parameters:     Required:         - siteId: The ID of the site containing the list         - listId: The ID of the list where the item will be created         - fields: Key-value pairs representing column names and their values Typical Workflow:     1. User asks to 'add a new job opening for Software Engineer to the Job Openings list'     2. First: searchSitesByName('HR Hiring Test') → get siteId     3. Second: listLists(siteId) → find 'Job Openings' list → get listId     4. Third: Use THIS tool with siteId + listId + fields to create the item Returns:     Newly created list item with its ID and field values on success NOTE: Field names may be either the internal column name or the display name shown in the SharePoint UI (matched case-insensitively). Use listLists to discover available columns in a list before creating items. */
+  createListItem(args) {
+    return this.client.callTool("createListItem", args);
+  }
+  /** Check the status of an asynchronous operation (such as copy or move) using the operation token returned from the original operation.Returns progress information if still in progress, error details if failed, or the final File or Folder if completed successfully.When passing tool outputs that are labelled "operationToken", you must pass the value character-for-character with absolutely no modification, truncation, or reformatting. */
+  checkOperationStatus(args) {
+    return this.client.callTool("checkOperationStatus", args);
+  }
+  /** List Document Libraries (also called Drives) in the specified Sharepoint Site.If not specified, the root site will be used. Pagination: Returns up to 200 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. */
+  listDocumentLibrariesInSite(args) {
+    return this.client.callTool("listDocumentLibrariesInSite", args);
+  }
+  /** Upload a file from a SharePoint or OneDrive URL to a destination folder in a Document Library (Drive).This tool takes a source URL (must be a SharePoint/OneDrive URL), resolves it to a File, and uploads it to the destination.Note that the file will be copied from the source URL, no changes will be made to the original file.Only supports SharePoint and OneDrive URLs with valid access permissions.This operation is asynchronous and may take time for large files or folders. The response includes a token to check the status of the copy operation using the CheckOperationStatus tool.When passing tool outputs that are labelled "operationToken", you must pass the value character-for-character with absolutely no modification, truncation, or reformatting. */
+  uploadFileFromUrl(args) {
+    return this.client.callTool("uploadFileFromUrl", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Rename a file or a folder (also referred to as DriveItems) within a specified Document Library (also referred to as a Drive).Note: The new name must comply with naming conventions. */
+  renameFileOrFolder(args) {
+    return this.client.callTool("renameFileOrFolder", args);
+  }
+  /** List all subsites (child sites) of a SharePoint Site. Use this to discover what subsites exist within a parent site. Pagination: Returns up to 200 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. */
+  listSubsites(args) {
+    return this.client.callTool("listSubsites", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive. Move a file or folder (also referred to as DriveItem) to a destination folder. Supports moving across different Document Libraries (Drives) within SharePoint. This operation is asynchronous and may take time for large files or folders. The response includes a token to check the status of the move operation using the CheckOperationStatus tool.When passing tool outputs that are labelled "operationToken", you must pass the value character-for-character with absolutely no modification, truncation, or reformatting. */
+  moveFileOrFolder(args) {
+    return this.client.callTool("moveFileOrFolder", args);
+  }
+  /** Get sensitivity labels available to the current user in the current tenant. Use this tool before setSensitivityLabelOnFile when you know a label name but need the tenant-specific label ID. */
+  getSensitivityLabels(args) {
+    return this.client.callTool("getSensitivityLabels", args);
+  }
+  /** Get a single ITEM (row/record) from a SharePoint LIST by its ID. Use this to retrieve detailed data for one specific item. SharePoint Hierarchy - You are reading at the ITEMS level: - SITE (e.g., 'HR Hiring Test') - └── LIST (e.g., 'Job Openings') -       └── ITEM (a specific record) ← This tool retrieves one item Requires:     siteId: The site containing the list     listId: The specific list containing the item     itemId: The specific item to retrieve Typical Workflow:     1. User asks to 'get details of Sales Intern from Job Openings list'     2. First: Search for the parent site (e.g., 'HR Hiring Test') -> get siteId     3. Second: listLists(siteId) -> find 'Job Openings' list -> get listId     4. Third: listListItems(siteId, listId) -> find 'Sales Intern' item -> get itemId     5. Fourth: Use THIS tool with siteId + listId + itemId to get full item details NOTE: Determine from context whether a mentioned name refers to a SITE or a LIST.Lists are containers within sites (e.g., 'Job Openings', 'Contacts', 'Tasks'). If the user specifies both a site and list, use the site name to get siteId first. Never use site search tools to find list names - lists must be found within their parent site.To get the itemId, you must first list the items in the list and find the relevant item based on its fields (e.g., Title) before using this tool to get that item's details. */
+  getListItem(args) {
+    return this.client.callTool("getListItem", args);
+  }
+  /** Sends a sharing invitation to grant permissions for a SharePoint LIST. Use this to share an entire list with other users. SharePoint Hierarchy - You are sharing at the LIST level: - SITE (e.g., 'HR Hiring Test') - └── LIST (e.g., 'Job Openings') ← This tool shares the entire list -       └── ITEMS (individual records) Parameters:     Required:         - listId: The ID of the list to share         - recipientEmails: Email addresses of users to share with (array)     Optional:         - role: Permission role to assign (default: 'read')         - sendEmail: Send email notification (default: true)         - siteName: Name of the site containing the list Role Values and Permissions:     'read': Can view list items and pages (Read-only access)     'contribute': Can view, add, update, and delete list items     'edit': Can add, edit, delete lists and list items (Full edit access) Typical Workflow:     1. User asks to 'share the Job Openings list with john@contoso.com'     2. First: listLists(siteId) → find 'Job Openings' list → get listId     3. Second: Use THIS tool with listId + recipientEmails + role to share  */
+  sendInviteForList(args) {
+    return this.client.callTool("sendInviteForList", args);
+  }
+  /** Get ITEMS (rows/records) from a specific SharePoint LIST. Use this to retrieve data from within a list. SharePoint Hierarchy - You are at the ITEMS level: - SITE (e.g., 'HR Hiring Test') - └── LIST (e.g., 'Job Openings') -       └── ITEMS (individual records) ← This tool retrieves these Requires BOTH:     siteId: The site containing the list     listId: The specific list to retrieve items from Typical Workflow:     1. User asks to 'get all job openings from Job Openings list on HR Hiring Test site'     2. First: searchSitesByName('HR Hiring Test') → get siteId     3. Second: listLists(siteId) → find 'Job Openings' list → get listId     4. Third: Use THIS tool with siteId + listId → retrieve all job opening items NOTE: This tool is NOT for discovering what lists exist - use listLists for that. Pagination: Returns up to 200 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. Filter: Pass a `filter` OData expression to narrow results server-side. */
+  listListItems(args) {
+    return this.client.callTool("listListItems", args);
+  }
+  /** Deletes a COLUMN from a SharePoint LIST. SharePoint Hierarchy - You are deleting at the COLUMN level: - SITE (e.g., 'HR Hiring Test') ← Parent site - └── LIST (e.g., 'Job Openings') ← Parent list -       └── COLUMNS (schema definition) ← This tool deletes a column here Parameters:     Required:         - siteId: The ID of the site containing the list         - listId: The ID of the list containing the column         - columnId: The ID of the column to delete Typical Workflow:     1. User asks to 'delete the Salary column from Job Openings list'     2. First: Get siteId and listId     3. Second: listColumns(siteId, listId) → find 'Salary' column → get columnId     4. Third: Use THIS tool with siteId + listId + columnId to delete WARNING: Deleting a column removes all data stored in that column for all items. */
+  deleteColumn(args) {
+    return this.client.callTool("deleteColumn", args);
+  }
+  /** Creates a new Column in a SharePoint List. SharePoint Hierarchy - You are creating at the COLUMN level: - SITE (e.g., 'HR Hiring Test') ← Parent site - └── LIST (e.g., 'Job Openings') ← Parent list -       └── COLUMNS (schema definition) ← This tool creates a new column here -       └── ITEMS (individual records) === TOOL PARAMETERS === Required:   - siteId: ID of the SharePoint site containing the list   - listId: ID of the SharePoint list where the column will be created   - name: Internal name of the column (programmatic identifier)   - columnType: Type of column to create (see COLUMN TYPES below) Optional:   - columnProperties: Column Type specific settings as Dictionary<string, object>   - description: Description of the column   - displayName: Display name shown in UI (defaults to 'name' if not provided)   - required: Make the column required (default: false)   - hidden: Hide column from views (default: false) === TYPICAL WORKFLOW === 1. User asks to 'add a Status column with choices New, In Progress, Done' 2. First: searchSitesByName('HR Hiring Test') → get siteId 3. Second: listLists(siteId) → find 'Job Openings' list → get listId 4. Third: Use THIS tool with siteId + listId + name + columnType + columnProperties === COLUMN TYPES as defined in Microsoft.Vroom.Models.SharePoint.ColumnDefinition.columnTypes and its PROPERTIES === --- COMMONLY USED COLUMNS --- 1. 'text' - Single line of text    Properties: { "maxLength": 255 } 2. 'note' - Multiple lines of text    Properties: {      "allowMultipleLines": true,      "textType": "plain" | "richText" | "enhancedRichText",      "linesForEditing": 6,      "maxLength": 63999,      "appendChangesToExistingText": false    } 3. 'number' - Numeric values    Properties: { "minimum": 0, "maximum": 100, "decimalPlaces": 2, "displayAs": "number" | "percentage" } 4. 'integer' - Whole numbers only    Properties: { "minimum": 0, "maximum": 1000 } 5. 'currency' - Money values    Properties: { "locale": "en-US" } 6. 'counter' - Auto-incrementing ID (system column, usually auto-created as 'ID')    Properties: {} (no additional options) 7. 'dateTime' - Date and time values    Properties: { "format": "dateOnly" | "dateTime", "displayAs": "default" | "friendly" | "standard" } 8. 'boolean' - Yes/No checkbox    Properties: {} (no additional options) 9. 'choice' - Single selection (Required Property: choices)    Properties: { "choices": ["Opt1", "Opt2"], "displayAs": "dropDownMenu" | "radioButtons" } 10. 'multichoice' - Multiple selection (Required Property: choices)     Properties: { "choices": ["Opt1", "Opt2"], "displayAs": "checkBoxes" } 11. 'outcomeChoice' (alias 'taskOutcome') - Task outcome choices     Properties: { "choices": ["Approved", "Rejected"] } 12. 'lookup' - Reference to another list (Required Property: listId)     Properties: { "listId": "guid", "columnName": "Title", "allowMultipleValues": false } 13. 'user' (alias 'personOrGroup') - User/group picker     Properties: { "allowMultipleSelection": false, "format": "peopleOnly" | "peopleAndGroups" }     (the MS Graph name "chooseFromType" is also accepted and mapped to "format") 14. 'url' (alias 'hyperlinkOrPicture') - URL/hyperlink or picture     Properties: { "isPicture": false } 15. 'calculated' - Computed field (Required Property: formula)     Properties: { "formula": "=[Col1]+[Col2]", "outputType": "text" | "number" | "dateTime" | "boolean" | "currency" } --- MANAGED METADATA COLUMNS (API facet: 'managedMetadata') --- 16. 'term' - Single managed metadata term (Required Property: termSetId)     Properties: { "termSetId": "guid", "showFullyQualifiedName": false, "allowMultipleValues": false } 17. 'multiterm' - Multiple managed metadata terms (Required Property: termSetId). Tool emits the 'managedMetadata' facet and sets allowMultipleValues=true automatically.     Properties: { "termSetId": "guid", "showFullyQualifiedName": false } --- LOCATION COLUMNS --- 18. 'location' - Location/address picker (modern)     Properties: {} (no additional options) 19. 'geolocation' - Geographic coordinates (latitude/longitude)     Properties: {} (no additional options) --- MEDIA COLUMNS --- 20. 'thumbnail' - Image thumbnail column     Properties: {} (no additional options) === EXAMPLE TOOL REQUESTS === Example 1 - Create a text column:   createColumn(     siteId: "contoso.sharepoint.com,abc123,def456",     listId: "7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e",     name: "CustomerName",     columnType: "text",     columnProperties: { "maxLength": 100 },     description: "Name of the customer",     displayName: "Customer Name",   ) Example 2 - Create a choice column:   createColumn(     siteId: "contoso.sharepoint.com,abc123,def456",     listId: "7b8c9d0e-1f2a-3b4c-5d6e-7f8a9b0c1d2e",     name: "Status",     columnType: "choice",     columnProperties: {       "choices": ["New", "In Progress", "Completed", "Cancelled"],       "displayAs": "dropDownMenu"     },     required: true   ) === RETURNS === Newly created column with its metadata on success.  */
+  createColumn(args) {
+    return this.client.callTool("createColumn", args);
+  }
+  /** Get the default Document Library (also called Drive) in a Sharepoint Site.If not specified, the root site will be used. */
+  getDefaultDocumentLibraryInSite(args) {
+    return this.client.callTool("getDefaultDocumentLibraryInSite", args);
+  }
+  /** Finds a file or a folder (also called as a DriveItem) accessible to a user by passing a search query.This tool searches across all sites and document libraries the user has access to, so it is less efficient than findFileOrFolderInMyDrive. If you know the file or folder is in the user's OneDrive, use the findFileOrFolderInMyDrive tool instead.For files or folder's that you know are in a specific SharePoint site or someone else's document library, use the findFileOrFolder tool. Pagination: Returns up to 20 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. */
+  findFileOrFolder(args) {
+    return this.client.callTool("findFileOrFolder", args);
+  }
+  /** Get all SharePoint LISTS available on a specific SITE. Use this to discover what lists exist within a SharePoint site. SharePoint Hierarchy: - SITE (e.g., 'HR Hiring Test') ← You need the siteId for this level - └── LIST (e.g., 'Job Openings', 'Candidate Feedback', 'Tasks') ← This tool finds these -     └── ITEMS (individual records) Typical Workflow:     1. User asks about 'Job Openings list on HR Hiring Test site'     2. First: Use searchSitesByName to find 'HR Hiring Test' site → get siteId     3. Then: Use THIS tool (listLists) with that siteId → find 'Job Openings' list → get listId     4. Finally: Use listListItems/createListItem/etc. with siteId + listId to work with list items Requires:     siteId (in format 'hostname,siteCollectionId,webId') Returns:     List metadata including listId, display name, description for all lists in the site Example: To work with 'Job Openings list', you must first know which site contains it (e.g., 'HR Hiring Test'), get that siteId, then use this tool to find 'Job Openings' within that site. Pagination: Returns up to 200 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. */
+  listLists(args) {
+    return this.client.callTool("listLists", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive. Copy a file or folder (also referred to as DriveItem) to a destination folder. Supports copying across different Document Libraries (Drives) within SharePoint. This operation is asynchronous and may take time for large files or folders. The response includes a token to check the status of the copy operation using the CheckOperationStatus tool.When passing tool outputs that are labelled "operationToken", you must pass the value character-for-character with absolutely no modification, truncation, or reformatting. */
+  copyFileOrFolder(args) {
+    return this.client.callTool("copyFileOrFolder", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Sends a sharing invitation to grant read/write permissions on a file or folder (DriveItem) within a specified Document Library (Drive).Supports assigning roles and notifying recipients. */
+  shareFileOrFolder(args) {
+    return this.client.callTool("shareFileOrFolder", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Create or upload a text file of size less than 5MB to a specific Document Library (or Drive).You can upload it to a specific folder on the DocumentLibrary.If no folder is specified, the file will be uploaded to the root folder of the Document Library. */
+  createSmallTextFile(args) {
+    return this.client.callTool("createSmallTextFile", args);
+  }
+  /** Create a binary file of size less than 5MB by base64 encoding its content to a specific Document Library (or Drive).You can create it in a specific folder on the DocumentLibrary.If no folder is specified, the file will be created in the root folder of the Document Library. */
+  createSmallBinaryFile(args) {
+    return this.client.callTool("createSmallBinaryFile", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Read i.e. download a text file of size less than 5MB from a specific Document Library (or Drive).You need to provide a fileId (driveItemId of a File) and a documentLibraryId to identify the file. */
+  readSmallTextFile(args) {
+    return this.client.callTool("readSmallTextFile", args);
+  }
+  /** Use this tool for SharePoint document libraries or when you need to specify a drive.Read a binary file of size less than 5MB from a specific Document Library (or Drive).You need to provide a fileId (driveItemId of a File) and a documentLibraryId to identify and download the file.The file content will be returned as a base64 encoded string. */
+  readSmallBinaryFile(args) {
+    return this.client.callTool("readSmallBinaryFile", args);
+  }
+};
+
+// src/agent365/generated/onedrive.ts
+var OneDriveFacade = class {
+  constructor(client) {
+    this.client = client;
+  }
+  client;
+  /** Use this tool for the user's personal OneDrive only.Rename a file or a folder (also referred to as DriveItems) in the user's OneDrive.Note: The new name must comply with naming conventions. */
+  renameFileOrFolderInMyOnedrive(args) {
+    return this.client.callTool("renameFileOrFolderInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Enumerates files and folders (DriveItems) contained within a specified parent folder in the user's OneDrive. Pagination: Returns up to 20 items per call. If a 'nextPageCursor' is present in the response, pass it back as 'pageCursor' to fetch the next page. */
+  getFolderChildrenInMyOnedrive(args) {
+    return this.client.callTool("getFolderChildrenInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Sends a sharing invitation to grant read/write permissions on a file or folder (DriveItem) in the user's OneDrive.Supports assigning roles and notifying recipients. */
+  shareFileOrFolderInMyOnedrive(args) {
+    return this.client.callTool("shareFileOrFolderInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Set the sensitivity label of a file in the user's OneDrive. */
+  setSensitivityLabelOnFileInMyOnedrive(args) {
+    return this.client.callTool("setSensitivityLabelOnFileInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Create or upload a text file of size less than 5MB to the user's OneDrive.You can upload it to a specific folder.If no folder is specified, the file will be uploaded to the root folder of the user's OneDrive. */
+  createSmallTextFileInMyOnedrive(args) {
+    return this.client.callTool("createSmallTextFileInMyOnedrive", args);
+  }
+  /** Finds a file or a folder (also called as a DriveItem) in the user's OneDrive by passing a search query.This is more efficient than searching all files and folders accessible to the user if you know the file or folder is in the user's OneDrive.For files or folder's that you know are in a specific SharePoint site or document library, use the findFileOrFolder tool and pass in the document library id to narrow down the search. */
+  findFileOrFolderInMyDrive(args) {
+    return this.client.callTool("findFileOrFolderInMyDrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Get metadata of a file or a folder (also referred to as DriveItems) from the user's OneDrive. */
+  getFileOrFolderMetadataInMyOnedrive(args) {
+    return this.client.callTool("getFileOrFolderMetadataInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Delete a file or a folder (also referred to as DriveItems) from the user's OneDrive. */
+  deleteFileOrFolderInMyOnedrive(args) {
+    return this.client.callTool("deleteFileOrFolderInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Read a binary file of size less than 5MB from the user's OneDrive.The file content will be returned as a base64 encoded string. */
+  readSmallBinaryFileFromMyOnedrive(args) {
+    return this.client.callTool("readSmallBinaryFileFromMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Check the status of an asynchronous operation (such as copy or move) using the operation token returned from the original operation.Returns progress information if still in progress, error details if failed, or the final File or Folder if completed successfully.When passing tool outputs that are labelled "operationToken", you must pass the value character-for-character with absolutely no modification, truncation, or reformatting. */
+  checkOperationStatusInMyOnedrive(args) {
+    return this.client.callTool("checkOperationStatusInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Move a file (also referred to as a DriveItem) in the user's OneDrive to another folder.This tool only supports moving files less than 5MB. */
+  moveSmallFileInMyOnedrive(args) {
+    return this.client.callTool("moveSmallFileInMyOnedrive", args);
+  }
+  /** Get information about the user's OneDrive including drive metadata, quota, and owner information */
+  getOnedrive(args) {
+    return this.client.callTool("getOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Create a new folder (represented as a DriveItem) in the user's OneDrive as a child of the specified parent folder. */
+  createFolderInMyOnedrive(args) {
+    return this.client.callTool("createFolderInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Read i.e. download a text file from the user's OneDrive.You need to provide a fileId (driveItemId of a File) to identify and download the file. */
+  readSmallTextFileFromMyOnedrive(args) {
+    return this.client.callTool("readSmallTextFileFromMyOnedrive", args);
+  }
+  /** Get sensitivity labels available to the current user in the current tenant. Use this tool before setSensitivityLabelOnFile when you know a label name but need the tenant-specific label ID. */
+  getSensitivityLabels(args) {
+    return this.client.callTool("getSensitivityLabels", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Move a file or folder (DriveItem) to a destination folder within the user's OneDrive.This operation is asynchronous and may take time for large files or folders. The response includes a token to check the status of the move operation using the checkOperationStatusInMyOnedrive tool.When passing tool outputs that are labelled "operationToken", you must pass the value character-for-character with absolutely no modification, truncation, or reformatting. */
+  moveFileOrFolderInMyOnedrive(args) {
+    return this.client.callTool("moveFileOrFolderInMyOnedrive", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Create a binary file of size less than 5MB by base64 encoding its content to the user's OneDrive.You can create it in a specific folder.If no folder is specified, the file will be created in the root folder of the user's OneDrive. */
+  createSmallBinaryFileInMyOnedrive(args) {
+    return this.client.callTool("createSmallBinaryFileInMyOnedrive", args);
+  }
+  /** Get metadata of a file or a folder (also referred to as DriveItems) from a sharing URL or a Vroom/Graph drive item API URL (e.g. .../_api/v2.0/drives/{driveId}/items/{itemId}).Only users with existing explicit permissions to access the file will be allowed to get the metadata of the file. */
+  getFileOrFolderMetadataByUrl(args) {
+    return this.client.callTool("getFileOrFolderMetadataByUrl", args);
+  }
+  /** Use this tool for the user's personal OneDrive only.Copy a file or folder (DriveItem) to a destination folder within the user's OneDrive.This operation is asynchronous and may take time for large files or folders. The response includes a token to check the status of the copy operation using the checkOperationStatusInMyOnedrive tool.When passing tool outputs that are labelled "operationToken", you must pass the value character-for-character with absolutely no modification, truncation, or reformatting. */
+  copyFileOrFolderInMyOnedrive(args) {
+    return this.client.callTool("copyFileOrFolderInMyOnedrive", args);
+  }
+};
+
+// src/agent365/generated/copilot.ts
+var CopilotFacade = class {
+  constructor(client) {
+    this.client = client;
+  }
+  client;
+  /** Use this tool to search internal Microsoft 365 content (documents, emails, chats, sites, files) when the specific workload is unclear or spans multiple areas, but always prefer workload-specific tools (SharePoint, OneDrive, Teams, Mail) when the workload is explicitly stated or clearly implied; do not use this tool for general knowledge, news, public web content, or external information. */
+  copilot_chat(args) {
+    return this.client.callTool("copilot_chat", args);
+  }
+};
+
+// src/agent365/generated/agent-mail.ts
+var AgentMailFacade = class {
+  constructor(client) {
+    this.client = client;
+  }
+  client;
+  /** Get an Outlook-style inbox snapshot with conversation list and unread counts. START HERE to see what's new. Returns conversations grouped by thread with unread badges. */
+  mail_Snapshot(args) {
+    return this.client.callTool("mail_Snapshot", args);
+  }
+  /** Open a conversation thread with per-message details. Use after mail_Snapshot to read a specific thread. Marks messages as read by default. */
+  mail_OpenConversation(args) {
+    return this.client.callTool("mail_OpenConversation", args);
+  }
+  /** Open a single message with full content and parent/child navigation pointers. Use for detailed message reading or thread traversal. */
+  mail_OpenMessage(args) {
+    return this.client.callTool("mail_OpenMessage", args);
+  }
+  /** Unified send: new email, reply, replyAll, or forward. Use 'op' to specify operation type. */
+  mail_Send(args) {
+    return this.client.callTool("mail_Send", args);
+  }
+};
+
 // src/agent365/facades/shared.ts
 function decodeHtml(html) {
   return (html ?? "").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&#92;/g, "\\").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
@@ -69631,6 +70291,10 @@ var TeamsClient = class {
   listTeams() {
     return this.gen.ListTeams({});
   }
+  /** List team membership using a teamId returned by listTeams(). */
+  listTeamMembers(args) {
+    return this.gen.ListTeamMembers(args);
+  }
   listChannels(args) {
     return this.gen.ListChannels(args);
   }
@@ -69660,6 +70324,28 @@ var TeamsClient = class {
 };
 
 // src/agent365/facades/mail.ts
+var PIN_PROPERTY = "SystemTime 0x0F02";
+var PIN_SENTINEL = Date.parse("4500-09-01T00:00:00Z");
+var PIN_THRESHOLD = "4500-01-01T00:00:00Z";
+function getMailPinState(message) {
+  const properties = message.singleValueExtendedProperties;
+  if (!Array.isArray(properties)) return null;
+  const matches = properties.filter((property) => {
+    if (!property || typeof property !== "object") return false;
+    const id = property.id;
+    return typeof id === "string" && /^SystemTime 0x0*f02$/i.test(id);
+  });
+  if (matches.length !== 1) return null;
+  const value = matches[0].value;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    return null;
+  }
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return null;
+  if ((/* @__PURE__ */ new Date(`${value.slice(0, 19)}Z`)).toISOString().slice(0, 19) !== value.slice(0, 19)) return null;
+  if (timestamp === PIN_SENTINEL) return /[1-9]/.test(value.match(/\.(\d+)/)?.[1] ?? "") ? null : true;
+  return timestamp < Date.parse(PIN_THRESHOLD) ? false : null;
+}
 var MailClient = class {
   constructor(client, gen) {
     this.client = client;
@@ -69681,6 +70367,40 @@ var MailClient = class {
       messages: unwrapList(r, "value"),
       nextLink: r?.nextLink ?? r?.["@odata.nextLink"],
       hasMoreResults: r?.hasMoreResults
+    };
+  }
+  /**
+   * Read one page of pinned mail across folders, or in an exact folder ID.
+   * Pass only the returned nextLink to continue. The default/max page size is
+   * 25 to keep metadata responses within the gateway's payload limit.
+   * Unexpected property values remain in the result with isPinned: null.
+   */
+  async listPinnedMessages(args = {}, opts = {}) {
+    let query;
+    if (args.nextLink !== void 0) {
+      if (!args.nextLink.trim() || args.folderId !== void 0 || args.pageSize !== void 0) {
+        throw new TypeError("nextLink must be non-empty and cannot be combined with folderId or pageSize");
+      }
+      query = { nextLink: args.nextLink };
+    } else {
+      const pageSize = args.pageSize ?? 25;
+      if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 25) {
+        throw new RangeError("pageSize must be an integer between 1 and 25");
+      }
+      let filter = `singleValueExtendedProperties/Any(ep: ep/id eq '${PIN_PROPERTY}' and cast(ep/value,Edm.DateTimeOffset) ge ${PIN_THRESHOLD})`;
+      if (args.folderId !== void 0) {
+        if (!args.folderId.trim()) throw new TypeError("folderId must be a non-empty folder ID");
+        filter += ` and parentFolderId eq '${args.folderId.replace(/'/g, "''")}'`;
+      }
+      const expand = `singleValueExtendedProperties($filter=id eq '${PIN_PROPERTY}')`;
+      query = {
+        queryParameters: `?$top=${pageSize}&$select=id,subject,from,receivedDateTime,parentFolderId,isRead,categories,flag,webLink&$filter=${encodeURIComponent(filter)}&$expand=${encodeURIComponent(expand)}`
+      };
+    }
+    const page = await this.searchByQuery(query, opts);
+    return {
+      ...page,
+      messages: page.messages.map((message) => ({ ...message, isPinned: getMailPinState(message) }))
     };
   }
   /** Natural-language message search (Copilot-backed). */
@@ -69907,6 +70627,51 @@ var GraphClient = class {
   }
 };
 
+// src/agent365/facades/copilot.ts
+var CopilotClient = class {
+  constructor(client, gen) {
+    this.client = client;
+    this.gen = gen;
+  }
+  client;
+  gen;
+  get rawClient() {
+    return this.client;
+  }
+  /** Web grounding is opt-in; preserve the conversationId returned by the server. */
+  chat(args) {
+    return this.gen.copilot_chat({ ...args, enableWebSearch: args.enableWebSearch ?? false });
+  }
+};
+
+// src/agent365/facades/agent-mail.ts
+var AgentMailClient = class {
+  constructor(client, gen) {
+    this.client = client;
+    this.gen = gen;
+  }
+  client;
+  gen;
+  get rawClient() {
+    return this.client;
+  }
+  snapshot(args = {}) {
+    return this.gen.mail_Snapshot(args);
+  }
+  /** Preserve unread state unless the caller explicitly requests marking read. */
+  openConversation(args) {
+    return this.gen.mail_OpenConversation({ ...args, markAsRead: args.markAsRead ?? false });
+  }
+  /** Preserve unread state when opening an individual message as well. */
+  openMessage(args) {
+    return this.gen.mail_OpenMessage({ ...args, markAsRead: args.markAsRead ?? false });
+  }
+  /** Sends immediately; op selects new, reply, replyAll, or forward. */
+  send(args) {
+    return this.gen.mail_Send(args);
+  }
+};
+
 // src/agent365/index.ts
 init_oauth_provider();
 init_constants();
@@ -69968,6 +70733,22 @@ var Agent365Client = class {
     const srv = await this.server("mcp_ExcelServer");
     return new ExcelClient(srv, new ExcelFacade(srv));
   }
+  /** Typed SharePoint tools; list responses retain their pagination cursors. */
+  async sharepoint() {
+    return new SharePointFacade(await this.server("mcp_SharePointRemoteServer"));
+  }
+  /** Typed personal OneDrive tools, using the server's original method names. */
+  async onedrive() {
+    return new OneDriveFacade(await this.server("mcp_OneDriveRemoteServer"));
+  }
+  async copilot() {
+    const srv = await this.server("mcp_M365Copilot");
+    return new CopilotClient(srv, new CopilotFacade(srv));
+  }
+  async agentMail() {
+    const srv = await this.server("mcp_AgentMailTools");
+    return new AgentMailClient(srv, new AgentMailFacade(srv));
+  }
   /**
    * Get (or open) a connection to the Enterprise Graph MCP. Unlike the Agent365
    * servers, Graph requires a device-bound token, so it uses the broker provider
@@ -70007,6 +70788,72 @@ init_azcli();
 init_log();
 init_auth();
 init_bridge();
+
+// src/graph.ts
+var graph_exports = {};
+__export(graph_exports, {
+  directReportsOf: () => directReportsOf,
+  groupsOf: () => groupsOf,
+  mailOf: () => mailOf,
+  managerOf: () => managerOf,
+  userToken: () => userToken
+});
+init_bridge();
+var GRAPH2 = "https://graph.microsoft.com";
+async function userToken(timeout = 200) {
+  return tokenViaKv({ resource: GRAPH2, method: "broker", timeout });
+}
+async function managerOf(oid, opts = {}) {
+  if (!/^[0-9a-fA-F-]{36}$/.test(oid)) throw new Error(`not an object id: ${oid}`);
+  const token = opts.token ?? await userToken(opts.timeout);
+  const res = await fetch(`${GRAPH2}/v1.0/users/${oid}/manager?$select=id,displayName`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`graph manager ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = await res.json();
+  return j.id ? { id: j.id, ...j.displayName ? { displayName: j.displayName } : {} } : null;
+}
+async function directReportsOf(managerOid, opts = {}) {
+  if (!/^[0-9a-fA-F-]{36}$/.test(managerOid)) throw new Error(`not an object id: ${managerOid}`);
+  const token = opts.token ?? await userToken(opts.timeout);
+  const out = [];
+  let url2 = `${GRAPH2}/v1.0/users/${managerOid}/directReports?$select=id,displayName,mail&$top=999`;
+  while (url2) {
+    const res = await fetch(url2, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`graph directReports ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const j = await res.json();
+    for (const u of j.value ?? []) if (u.id) {
+      out.push({ id: u.id, ...u.displayName ? { displayName: u.displayName } : {}, ...u.mail ? { mail: u.mail } : {} });
+    }
+    url2 = j["@odata.nextLink"];
+  }
+  return out;
+}
+async function mailOf(oid, opts = {}) {
+  if (!/^[0-9a-fA-F-]{36}$/.test(oid)) throw new Error(`not an object id: ${oid}`);
+  const token = opts.token ?? await userToken(opts.timeout);
+  const res = await fetch(`${GRAPH2}/v1.0/users/${oid}?$select=mail`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error(`graph user ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = await res.json();
+  return j.mail ?? null;
+}
+async function groupsOf(oid, opts = {}) {
+  if (!/^[0-9a-fA-F-]{36}$/.test(oid)) throw new Error(`not an object id: ${oid}`);
+  const token = opts.token ?? await userToken(opts.timeout);
+  const out = [];
+  let url2 = `${GRAPH2}/v1.0/users/${oid}/memberOf?$select=id,displayName&$top=999`;
+  while (url2) {
+    const res = await fetch(url2, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) throw new Error(`graph memberOf ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const j = await res.json();
+    for (const g of j.value ?? []) if (g.id) out.push({ id: g.id, ...g.displayName ? { displayName: g.displayName } : {} });
+    url2 = j["@odata.nextLink"];
+  }
+  return out;
+}
 
 // src/kusto.ts
 var kusto_exports = {};
@@ -73442,10 +74289,141 @@ var McpHttpClient = class {
     return r.content ?? r;
   }
 };
+
+// src/lionrock.ts
+var lionrock_exports = {};
+__export(lionrock_exports, {
+  LionrockApproversClient: () => LionrockApproversClient,
+  REQUEST_APPROVERS_TOOL: () => REQUEST_APPROVERS_TOOL
+});
+var REQUEST_APPROVERS_TOOL = {
+  name: "get_request_approvers",
+  description: "Local read-only helper over the existing Lionrock portal API. Returns every approval for an on-demand sub-request, including eligible approver aliases and the contact address for each pending type. Uses the same data as the portal's Who can approve link; requires no MCP server rollout. An AG auto-approval does not imply that GCT or other types are approved. For Service Blueprint plan approvals use get_execution_plan_approvals.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "Parent request ID (e.g. '11282636') or combined ID (e.g. '11282636-1')." },
+      subRequestId: { type: "integer", minimum: 1, description: "Sub-request ID. Required for a parent-only id; must match a combined id if supplied." }
+    },
+    required: ["id"],
+    additionalProperties: false
+  }
+};
+function requestIds(args) {
+  const match = typeof args?.id === "string" && /^([1-9]\d*)(?:-([1-9]\d*))?$/.exec(args.id.trim());
+  if (!match) throw new Error("id must be a numeric parent request ID or '<parent>-<subRequestId>'.");
+  const combinedSubId = match[2] === void 0 ? void 0 : Number(match[2]);
+  const subRequestId = args.subRequestId ?? combinedSubId;
+  if (!Number.isSafeInteger(subRequestId) || subRequestId <= 0) {
+    throw new Error("subRequestId must be a positive integer; supply it with a parent-only id.");
+  }
+  if (combinedSubId !== void 0 && combinedSubId !== subRequestId) {
+    throw new Error("subRequestId does not match the sub-request in id.");
+  }
+  return { requestId: match[1], subRequestId };
+}
+function record2(value, label) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid Lionrock ${label} response: expected an object.`);
+  }
+  return value;
+}
+function nullableString(value, label) {
+  if (value === void 0 || value === null) return null;
+  if (typeof value !== "string") throw new Error(`Invalid Lionrock ${label}: expected a string or null.`);
+  return value;
+}
+var LionrockApproversClient = class {
+  server;
+  auth;
+  transport;
+  token;
+  constructor(options) {
+    this.server = options.server;
+    this.auth = options.auth;
+    this.transport = options.fetch ?? fetch;
+  }
+  async get(path9) {
+    this.token ??= this.auth.getToken({ resourceUrl: this.server.url, scopes: [this.server.scope] });
+    const res = await this.transport(new URL(path9, new URL(this.server.url).origin), {
+      method: "GET",
+      headers: { Authorization: `Bearer ${await this.token}`, Accept: "application/json" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(3e4)
+    });
+    if (!res.ok) throw new Error(`Lionrock API ${res.status} on ${path9}; current approvers could not be read.`);
+    if (!res.headers.get("content-type")?.includes("application/json")) {
+      throw new Error(`Invalid Lionrock response on ${path9}: expected JSON (possibly a login page).`);
+    }
+    return res.json();
+  }
+  async getRequestApprovers(args) {
+    const { requestId, subRequestId } = requestIds(args);
+    const path9 = `/api/requests/${requestId}/subrequests/${subRequestId}`;
+    const [rawSub, rawApprovals] = await Promise.all([this.get(path9), this.get(`${path9}/approval`)]);
+    const sub = record2(rawSub, "sub-request");
+    const detail = record2(rawApprovals, "approvals");
+    if (typeof sub.Region !== "string" || !sub.Region.trim() || typeof sub.Status !== "string") {
+      throw new Error("Invalid Lionrock sub-request response: missing Region or Status.");
+    }
+    if (!Array.isArray(detail.Approvals)) {
+      throw new Error("Invalid Lionrock approvals response: missing Approvals array.");
+    }
+    const contacts = detail.Contacts == null ? {} : record2(detail.Contacts, "approval contacts");
+    const approvals = detail.Approvals.map((value) => {
+      const approval = record2(value, "approval");
+      if (typeof approval.Type !== "string" || !approval.Type.trim()) {
+        throw new Error("Invalid Lionrock approval response: missing Type.");
+      }
+      const by = nullableString(approval.By, "approval By");
+      return {
+        type: approval.Type,
+        // Matches request-detail.component.html's !approval.By; At and OperationLog
+        // describe history and cannot tell us that every required type has been approved.
+        pending: !by,
+        by,
+        at: nullableString(approval.At, "approval At"),
+        comments: nullableString(approval.Comments, "approval Comments")
+      };
+    });
+    const requiredTypes = typeof sub.RequiredApprovalTypes === "string" ? sub.RequiredApprovalTypes.split(",").map((t) => t.trim()).filter((t) => t && t !== "None" && t !== "0") : [];
+    if (requiredTypes.some((type) => !approvals.some((a) => a.type === type))) {
+      throw new Error("Incomplete Lionrock approvals response: a required approval type is missing.");
+    }
+    const pendingTypes = [...new Set(approvals.filter((a) => a.pending).map((a) => a.type))];
+    const ranked = new Map(await Promise.all(pendingTypes.map(async (type) => {
+      const result = await this.get(`/api/approvers/types/${encodeURIComponent(type)}/regions/${encodeURIComponent(sub.Region)}`);
+      if (!Array.isArray(result) || !result.every((upn) => typeof upn === "string" && upn.trim())) {
+        throw new Error(`Invalid Lionrock approvers response for ${type}: expected an alias list.`);
+      }
+      return [type, result];
+    })));
+    for (const approval of approvals) {
+      if (approval.pending) {
+        approval.approvers = ranked.get(approval.type);
+        approval.contact = nullableString(contacts[approval.type], "approval contact");
+      }
+    }
+    return {
+      found: true,
+      source: "lionrock-ui-api",
+      requestId,
+      subRequestId,
+      region: sub.Region,
+      status: sub.Status,
+      pendingApprovalTypes: pendingTypes,
+      approvals
+    };
+  }
+};
 export {
   Agent365Client,
+  AgentMailClient,
+  AgentMailFacade,
   CalendarClient,
   CalendarFacade,
+  CopilotClient,
+  CopilotFacade,
   DEFAULTS,
   ExcelClient,
   ExcelFacade,
@@ -73458,8 +74436,10 @@ export {
   McpServerClient,
   MeClient,
   MeFacade,
+  OneDriveFacade,
   PlannerClient,
   PlannerFacade,
+  SharePointFacade,
   TeamsClient,
   TeamsFacade,
   WordClient,
@@ -73476,8 +74456,11 @@ export {
   escapeTeamsContent,
   ev2_exports as ev2,
   geneva_exports as geneva,
+  getMailPinState,
+  graph_exports as graph,
   icm_exports as icm,
   kusto_exports as kusto,
+  lionrock_exports as lionrock,
   log_exports as log,
   mcp_http_exports as mcpHttp,
   parseTeamsLink,
