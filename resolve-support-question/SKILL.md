@@ -24,6 +24,14 @@ and `lionrock` wikis under `WIKI_ROOT`. Navigate through their indexes and follo
 the query skill's `searchRaw` rules. A task's narrower list of suggested wikis
 does not itself make the other mounted wikis unavailable.
 
+Follow links to relevant human-confirmed concept pages and read their full text
+with the Read tool in the current turn. Preserve the confirmed rule's scope and
+worked examples. An explicit, identified human correction is stronger evidence
+than a prior Bot answer or an inference. It does not establish current request
+or subscription state. The application's independent review verifies the active
+confirmation record before assigning high confidence. A page's self-description
+alone is not confirmation. Report unresolved contradictions as a knowledge gap.
+
 For an expected-behavior claim, read the page's discriminator and check the
 condition against the supplied case using permitted capabilities. If it requires
 a request ID, subscription, region or exact error that is missing, ask for that
