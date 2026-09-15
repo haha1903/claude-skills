@@ -43,19 +43,24 @@ cluster and database from the query invocation or verified source context. If
 unknown, say so beside the query rather than inventing a destination.
 
 Use the [documented UI deep link](https://learn.microsoft.com/en-us/kusto/api/rest/deeplink):
-`https://<cluster-host>/<percent-encoded-database>?web=1`. When the full query is
-available, add an **Open query** link with `&autorun=false&query=<encoded-KQL>`.
-Generate the parameter with a URL encoder, preserving the displayed KQL exactly,
-including quotes, newlines and time filters. Do not encode it by hand or put the
-link inside inline code or a code fence. Keep the database link as a fallback if
-the query link is too long for the destination.
+`https://<cluster-host>/<percent-encoded-database>?web=1` selects the database.
+For **Open query**, link directly to `https://dataexplorer.azure.com/` with URL-encoded
+`cluster`, `database`, `query` and `autorun=false` parameters. Use the cluster identifier
+from the verified database redirect. Preserve the displayed KQL exactly, including
+quotes, newlines and time filters. Generate parameters with a URL encoder. Do not
+encode them by hand or put links inside inline code or a code fence. Keep the
+database link as a fallback if the query link is too long for the destination.
+
+Use the direct web-app URL for queries: on 2026-09-15 the cluster redirect preserved
+`query` but dropped `autorun=false`. The direct URL selected the database and prefilled
+the editor without running the query in the browser.
 
 Example placement:
 
-**Kusto:** [agboa.westus2 / lionrock](https://agboa.westus2.kusto.windows.net/lionrock?web=1) · [Open query](https://agboa.westus2.kusto.windows.net/lionrock?web=1&autorun=false&query=Log%20%7C%20take%201)
+**Kusto:** [agboa.westus2 / lionrock](https://agboa.westus2.kusto.windows.net/lionrock?web=1) · [Open query](https://dataexplorer.azure.com/?cluster=agboa.westus2&database=lionrock&query=print%201&autorun=false)
 
 ```kusto
-Log | take 1
+print 1
 ```
 
 These links are for internal investigation. Keep internal Kusto links and query
