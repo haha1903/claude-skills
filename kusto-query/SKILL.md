@@ -34,6 +34,33 @@ node ~/.claude/skills/kusto-query/bin/query.mjs --mgmt \
 
 Output is JSON `{cols, rows}` (pipe to `jq`). Auth is the signed-in `az` user — run `az login` first, and connect the VPN for internal clusters. The bin calls the iris SDK (`kusto.queryKusto` / `kusto.mgmtKusto`) through `_iris-shared`, auto-building iris on first run.
 
+## Link queries in internal replies
+
+For each KQL block in an internal IcM comment, shadow reply or investigation note,
+put a clickable cluster/database link immediately above the block. A plain-text
+locator elsewhere in the answer does not satisfy this requirement. Use the exact
+cluster and database from the query invocation or verified source context. If
+unknown, say so beside the query rather than inventing a destination.
+
+Use the [documented UI deep link](https://learn.microsoft.com/en-us/kusto/api/rest/deeplink):
+`https://<cluster-host>/<percent-encoded-database>?web=1`. When the full query is
+available, add an **Open query** link with `&autorun=false&query=<encoded-KQL>`.
+Generate the parameter with a URL encoder, preserving the displayed KQL exactly,
+including quotes, newlines and time filters. Do not encode it by hand or put the
+link inside inline code or a code fence. Keep the database link as a fallback if
+the query link is too long for the destination.
+
+Example placement:
+
+**Kusto:** [agboa.westus2 / lionrock](https://agboa.westus2.kusto.windows.net/lionrock?web=1) · [Open query](https://agboa.westus2.kusto.windows.net/lionrock?web=1&autorun=false&query=Log%20%7C%20take%201)
+
+```kusto
+Log | take 1
+```
+
+These links are for internal investigation. Keep internal Kusto links and query
+text out of customer-facing replies under the caller's audience rules.
+
 ## Raw REST (host or authorized privileged workflows only)
 
 ## Authentication
