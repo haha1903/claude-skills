@@ -2256,7 +2256,7 @@ var init_Authority = __esm({
        * @param urlString
        */
       replacePath(urlString) {
-        let endpoint = urlString;
+        let endpoint2 = urlString;
         const cachedAuthorityUrl = new UrlString(this.metadata.canonical_authority, this.correlationId);
         const cachedAuthorityUrlComponents = cachedAuthorityUrl.getUrlComponents();
         const cachedAuthorityParts = cachedAuthorityUrlComponents.PathSegments;
@@ -2271,10 +2271,10 @@ var init_Authority = __esm({
             }
           }
           if (currentPart !== cachedPart) {
-            endpoint = endpoint.replace(`/${cachedPart}/`, `/${currentPart}/`);
+            endpoint2 = endpoint2.replace(`/${cachedPart}/`, `/${currentPart}/`);
           }
         });
-        return this.replaceTenant(endpoint);
+        return this.replaceTenant(endpoint2);
       }
       /**
        * The default open id configuration endpoint for any canonical authority.
@@ -4353,11 +4353,11 @@ var init_CacheManager = __esm({
        * @param tokenKeys {?TokenKeys}
        * @param performanceClient {?IPerformanceClient}
        */
-      getAccessToken(account, request, tokenKeys, targetRealm) {
-        const correlationId = request.correlationId;
+      getAccessToken(account, request2, tokenKeys, targetRealm) {
+        const correlationId = request2.correlationId;
         this.commonLogger.trace("CacheManager - getAccessToken called", correlationId);
-        const scopes = ScopeSet.createSearchScopes(request.scopes, correlationId);
-        const authScheme = request.authenticationScheme || AuthenticationScheme.BEARER;
+        const scopes = ScopeSet.createSearchScopes(request2.scopes, correlationId);
+        const authScheme = request2.authenticationScheme || AuthenticationScheme.BEARER;
         const credentialType = authScheme && authScheme.toLowerCase() !== AuthenticationScheme.BEARER.toLowerCase() ? CredentialType.ACCESS_TOKEN_WITH_AUTH_SCHEME : CredentialType.ACCESS_TOKEN;
         const accessTokenFilter = {
           homeAccountId: account.homeAccountId,
@@ -4367,7 +4367,7 @@ var init_CacheManager = __esm({
           realm: targetRealm || account.tenantId,
           target: scopes,
           tokenType: authScheme,
-          keyId: request.sshKid
+          keyId: request2.sshKid
         };
         const accessTokenKeys = tokenKeys && tokenKeys.accessToken || this.getTokenKeys().accessToken;
         const accessTokens = [];
@@ -5018,8 +5018,8 @@ var init_PopTokenGenerator = __esm({
        * @param request
        * @returns
        */
-      async generateCnf(request, logger) {
-        const reqCnf = await invokeAsync(this.generateKid.bind(this), PopTokenGenerateCnf, logger, this.performanceClient, request.correlationId)(request);
+      async generateCnf(request2, logger) {
+        const reqCnf = await invokeAsync(this.generateKid.bind(this), PopTokenGenerateCnf, logger, this.performanceClient, request2.correlationId)(request2);
         const reqCnfString = this.cryptoUtils.base64UrlEncode(JSON.stringify(reqCnf));
         return {
           kid: reqCnf.kid,
@@ -5031,8 +5031,8 @@ var init_PopTokenGenerator = __esm({
        * @param request
        * @returns
        */
-      async generateKid(request) {
-        const kidThumbprint = await this.cryptoUtils.getPublicKeyThumbprint(request);
+      async generateKid(request2) {
+        const kidThumbprint = await this.cryptoUtils.getPublicKeyThumbprint(request2);
         return {
           kid: kidThumbprint,
           xms_ksl: KeyLocation.SW
@@ -5044,8 +5044,8 @@ var init_PopTokenGenerator = __esm({
        * @param request
        * @returns
        */
-      async signPopToken(accessToken, keyId, request) {
-        return this.signPayload(accessToken, keyId, request);
+      async signPopToken(accessToken, keyId, request2) {
+        return this.signPayload(accessToken, keyId, request2);
       }
       /**
        * Utility function to generate the signed JWT for an access_token
@@ -5055,9 +5055,9 @@ var init_PopTokenGenerator = __esm({
        * @param claims
        * @returns
        */
-      async signPayload(payload, keyId, request, claims) {
-        const { resourceRequestMethod, resourceRequestUri, shrClaims, shrNonce, shrOptions } = request;
-        const resourceUrlString = resourceRequestUri ? new UrlString(resourceRequestUri, request.correlationId) : void 0;
+      async signPayload(payload, keyId, request2, claims) {
+        const { resourceRequestMethod, resourceRequestUri, shrClaims, shrNonce, shrOptions } = request2;
+        const resourceUrlString = resourceRequestUri ? new UrlString(resourceRequestUri, request2.correlationId) : void 0;
         const resourceUrlComponents = resourceUrlString?.getUrlComponents();
         return this.cryptoUtils.signJwt({
           at: payload,
@@ -5069,7 +5069,7 @@ var init_PopTokenGenerator = __esm({
           q: resourceUrlComponents?.QueryString ? [[], resourceUrlComponents.QueryString] : void 0,
           client_claims: shrClaims || void 0,
           ...claims
-        }, keyId, shrOptions, request.correlationId);
+        }, keyId, shrOptions, request2.correlationId);
       }
     };
   }
@@ -5280,27 +5280,27 @@ ${serverError}`, correlationId);
        * @param serverTokenResponse
        * @param authority
        */
-      async handleServerTokenResponse(serverTokenResponse, authority, reqTimestamp, request, apiId, authCodePayload, userAssertionHash, handlingRefreshTokenResponse, forceCacheRefreshTokenResponse, serverRequestId, additionalCacheKeyComponents) {
+      async handleServerTokenResponse(serverTokenResponse, authority, reqTimestamp, request2, apiId, authCodePayload, userAssertionHash, handlingRefreshTokenResponse, forceCacheRefreshTokenResponse, serverRequestId, additionalCacheKeyComponents) {
         let idTokenClaims;
         if (serverTokenResponse.id_token) {
-          idTokenClaims = extractTokenClaims(serverTokenResponse.id_token || "", this.cryptoObj.base64Decode, request.correlationId);
+          idTokenClaims = extractTokenClaims(serverTokenResponse.id_token || "", this.cryptoObj.base64Decode, request2.correlationId);
           if (authCodePayload && authCodePayload.nonce) {
             if (idTokenClaims.nonce !== authCodePayload.nonce) {
-              throw createClientAuthError(nonceMismatch, request.correlationId);
+              throw createClientAuthError(nonceMismatch, request2.correlationId);
             }
           }
         }
-        this.homeAccountIdentifier = generateHomeAccountId(serverTokenResponse.client_info || "", authority.authorityType, this.logger, this.cryptoObj, request.correlationId, idTokenClaims);
+        this.homeAccountIdentifier = generateHomeAccountId(serverTokenResponse.client_info || "", authority.authorityType, this.logger, this.cryptoObj, request2.correlationId, idTokenClaims);
         let requestStateObj;
         if (!!authCodePayload && !!authCodePayload.state) {
-          requestStateObj = parseRequestState(this.cryptoObj.base64Decode, authCodePayload.state, request.correlationId);
+          requestStateObj = parseRequestState(this.cryptoObj.base64Decode, authCodePayload.state, request2.correlationId);
         }
-        serverTokenResponse.key_id = serverTokenResponse.key_id || request.sshKid || void 0;
-        const cacheRecord = this.generateCacheRecord(serverTokenResponse, authority, reqTimestamp, request, idTokenClaims, userAssertionHash, authCodePayload, additionalCacheKeyComponents);
+        serverTokenResponse.key_id = serverTokenResponse.key_id || request2.sshKid || void 0;
+        const cacheRecord = this.generateCacheRecord(serverTokenResponse, authority, reqTimestamp, request2, idTokenClaims, userAssertionHash, authCodePayload, additionalCacheKeyComponents);
         let cacheContext;
         try {
           if (this.persistencePlugin && this.serializableCache) {
-            this.logger.verbose("Persistence enabled, calling beforeCacheAccess", request.correlationId);
+            this.logger.verbose("Persistence enabled, calling beforeCacheAccess", request2.correlationId);
             cacheContext = new TokenCacheContext(this.serializableCache, true);
             await this.persistencePlugin.beforeCacheAccess(cacheContext);
           }
@@ -5308,23 +5308,23 @@ ${serverError}`, correlationId);
             const cachedAccounts = this.cacheStorage.getAllAccounts({
               homeAccountId: cacheRecord.account.homeAccountId,
               environment: cacheRecord.account.environment
-            }, request.correlationId);
+            }, request2.correlationId);
             if (cachedAccounts.length < 1) {
-              this.logger.warning("Account used to refresh tokens not in persistence, refreshed tokens will not be stored in the cache", request.correlationId);
+              this.logger.warning("Account used to refresh tokens not in persistence, refreshed tokens will not be stored in the cache", request2.correlationId);
               this.performanceClient?.addFields({
                 acntLoggedOut: true
-              }, request.correlationId);
-              return await _ResponseHandler.generateAuthenticationResult(this.cryptoObj, authority, cacheRecord, false, request, this.performanceClient, idTokenClaims, requestStateObj, void 0, serverRequestId);
+              }, request2.correlationId);
+              return await _ResponseHandler.generateAuthenticationResult(this.cryptoObj, authority, cacheRecord, false, request2, this.performanceClient, idTokenClaims, requestStateObj, void 0, serverRequestId);
             }
           }
-          await this.cacheStorage.saveCacheRecord(cacheRecord, request.correlationId, isKmsi(idTokenClaims || {}), apiId, request.storeInCache);
+          await this.cacheStorage.saveCacheRecord(cacheRecord, request2.correlationId, isKmsi(idTokenClaims || {}), apiId, request2.storeInCache);
         } finally {
           if (this.persistencePlugin && this.serializableCache && cacheContext) {
-            this.logger.verbose("Persistence enabled, calling afterCacheAccess", request.correlationId);
+            this.logger.verbose("Persistence enabled, calling afterCacheAccess", request2.correlationId);
             await this.persistencePlugin.afterCacheAccess(cacheContext);
           }
         }
-        return _ResponseHandler.generateAuthenticationResult(this.cryptoObj, authority, cacheRecord, false, request, this.performanceClient, idTokenClaims, requestStateObj, serverTokenResponse, serverRequestId);
+        return _ResponseHandler.generateAuthenticationResult(this.cryptoObj, authority, cacheRecord, false, request2, this.performanceClient, idTokenClaims, requestStateObj, serverTokenResponse, serverRequestId);
       }
       /**
        * Generates CacheRecord
@@ -5332,10 +5332,10 @@ ${serverError}`, correlationId);
        * @param idTokenObj
        * @param authority
        */
-      generateCacheRecord(serverTokenResponse, authority, reqTimestamp, request, idTokenClaims, userAssertionHash, authCodePayload, additionalCacheKeyComponents) {
+      generateCacheRecord(serverTokenResponse, authority, reqTimestamp, request2, idTokenClaims, userAssertionHash, authCodePayload, additionalCacheKeyComponents) {
         const env = authority.getPreferredCache();
         if (!env) {
-          throw createClientAuthError(invalidCacheEnvironment, request.correlationId);
+          throw createClientAuthError(invalidCacheEnvironment, request2.correlationId);
         }
         const claimsTenantId = getTenantIdFromIdTokenClaims(idTokenClaims);
         let cachedIdToken;
@@ -5347,7 +5347,7 @@ ${serverError}`, correlationId);
             authority,
             this.homeAccountIdentifier,
             this.cryptoObj.base64Decode,
-            request.correlationId,
+            request2.correlationId,
             idTokenClaims,
             serverTokenResponse.client_info,
             env,
@@ -5361,15 +5361,15 @@ ${serverError}`, correlationId);
         }
         let cachedAccessToken = null;
         if (serverTokenResponse.access_token) {
-          const responseScopes = serverTokenResponse.scope ? ScopeSet.fromString(serverTokenResponse.scope, request.correlationId) : new ScopeSet(request.scopes || [], request.correlationId);
+          const responseScopes = serverTokenResponse.scope ? ScopeSet.fromString(serverTokenResponse.scope, request2.correlationId) : new ScopeSet(request2.scopes || [], request2.correlationId);
           const expiresIn = (typeof serverTokenResponse.expires_in === "string" ? parseInt(serverTokenResponse.expires_in, 10) : serverTokenResponse.expires_in) || 0;
           const extExpiresIn = (typeof serverTokenResponse.ext_expires_in === "string" ? parseInt(serverTokenResponse.ext_expires_in, 10) : serverTokenResponse.ext_expires_in) || 0;
           const refreshIn = (typeof serverTokenResponse.refresh_in === "string" ? parseInt(serverTokenResponse.refresh_in, 10) : serverTokenResponse.refresh_in) || void 0;
           const tokenExpirationSeconds = reqTimestamp + expiresIn;
           const extendedTokenExpirationSeconds = tokenExpirationSeconds + extExpiresIn;
           const refreshOnSeconds = refreshIn && refreshIn > 0 ? reqTimestamp + refreshIn : void 0;
-          cachedAccessToken = createAccessTokenEntity(this.homeAccountIdentifier, env, serverTokenResponse.access_token, this.clientId, claimsTenantId || authority.tenant || "", responseScopes.printScopes(), tokenExpirationSeconds, extendedTokenExpirationSeconds, this.cryptoObj.base64Decode, request.correlationId, refreshOnSeconds, serverTokenResponse.token_type, userAssertionHash, serverTokenResponse.key_id, additionalCacheKeyComponents);
-          const resource = request.resource || null;
+          cachedAccessToken = createAccessTokenEntity(this.homeAccountIdentifier, env, serverTokenResponse.access_token, this.clientId, claimsTenantId || authority.tenant || "", responseScopes.printScopes(), tokenExpirationSeconds, extendedTokenExpirationSeconds, this.cryptoObj.base64Decode, request2.correlationId, refreshOnSeconds, serverTokenResponse.token_type, userAssertionHash, serverTokenResponse.key_id, additionalCacheKeyComponents);
+          const resource = request2.resource || null;
           if (resource) {
             cachedAccessToken.resource = resource;
           }
@@ -5380,7 +5380,7 @@ ${serverError}`, correlationId);
           if (serverTokenResponse.refresh_token_expires_in) {
             const rtExpiresIn = typeof serverTokenResponse.refresh_token_expires_in === "string" ? parseInt(serverTokenResponse.refresh_token_expires_in, 10) : serverTokenResponse.refresh_token_expires_in;
             rtExpiresOn = reqTimestamp + rtExpiresIn;
-            this.performanceClient?.addFields({ ntwkRtExpiresOnSeconds: rtExpiresOn }, request.correlationId);
+            this.performanceClient?.addFields({ ntwkRtExpiresOnSeconds: rtExpiresOn }, request2.correlationId);
           }
           cachedRefreshToken = createRefreshTokenEntity(this.homeAccountIdentifier, env, serverTokenResponse.refresh_token, this.clientId, serverTokenResponse.foci, userAssertionHash, rtExpiresOn);
         }
@@ -5410,7 +5410,7 @@ ${serverError}`, correlationId);
        * @param fromTokenCache
        * @param stateString
        */
-      static async generateAuthenticationResult(cryptoObj, authority, cacheRecord, fromTokenCache, request, performanceClient, idTokenClaims, requestState, serverTokenResponse, requestId) {
+      static async generateAuthenticationResult(cryptoObj, authority, cacheRecord, fromTokenCache, request2, performanceClient, idTokenClaims, requestState, serverTokenResponse, requestId) {
         let accessToken = "";
         let responseScopes = [];
         let expiresOn = null;
@@ -5418,17 +5418,17 @@ ${serverError}`, correlationId);
         let refreshOn;
         let familyId = "";
         if (cacheRecord.accessToken) {
-          if (cacheRecord.accessToken.tokenType === AuthenticationScheme.POP && !request.popKid) {
+          if (cacheRecord.accessToken.tokenType === AuthenticationScheme.POP && !request2.popKid) {
             const popTokenGenerator = new PopTokenGenerator(cryptoObj, performanceClient);
             const { secret, keyId } = cacheRecord.accessToken;
             if (!keyId) {
-              throw createClientAuthError(keyIdMissing, request.correlationId);
+              throw createClientAuthError(keyIdMissing, request2.correlationId);
             }
-            accessToken = await popTokenGenerator.signPopToken(secret, keyId, request);
+            accessToken = await popTokenGenerator.signPopToken(secret, keyId, request2);
           } else {
             accessToken = cacheRecord.accessToken.secret;
           }
-          responseScopes = ScopeSet.fromString(cacheRecord.accessToken.target, request.correlationId).asArray();
+          responseScopes = ScopeSet.fromString(cacheRecord.accessToken.target, request2.correlationId).asArray();
           expiresOn = toDateFromSeconds(cacheRecord.accessToken.expiresOn);
           extExpiresOn = toDateFromSeconds(cacheRecord.accessToken.extendedExpiresOn);
           if (cacheRecord.accessToken.refreshOn) {
@@ -5470,7 +5470,7 @@ ${serverError}`, correlationId);
           expiresOn,
           extExpiresOn,
           refreshOn,
-          correlationId: request.correlationId,
+          correlationId: request2.correlationId,
           requestId: requestId || "",
           familyId,
           tokenType: cacheRecord.accessToken?.tokenType || "",
@@ -5517,20 +5517,20 @@ var init_ClientAssertionUtils = __esm({
 });
 
 // node_modules/@azure/msal-common/dist/network/RequestThumbprint.mjs
-function getRequestThumbprint(clientId, request, homeAccountId) {
+function getRequestThumbprint(clientId, request2, homeAccountId) {
   return {
     clientId,
-    authority: request.authority,
-    scopes: request.scopes,
+    authority: request2.authority,
+    scopes: request2.scopes,
     homeAccountIdentifier: homeAccountId,
-    claims: request.claims,
-    authenticationScheme: request.authenticationScheme,
-    resourceRequestMethod: request.resourceRequestMethod,
-    resourceRequestUri: request.resourceRequestUri,
-    shrClaims: request.shrClaims,
-    sshKid: request.sshKid,
-    embeddedClientId: request.embeddedClientId || request.extraParameters?.clientId,
-    resource: request.resource
+    claims: request2.claims,
+    authenticationScheme: request2.authenticationScheme,
+    resourceRequestMethod: request2.resourceRequestMethod,
+    resourceRequestUri: request2.resourceRequestUri,
+    shrClaims: request2.shrClaims,
+    sshKid: request2.sshKid,
+    embeddedClientId: request2.embeddedClientId || request2.extraParameters?.clientId,
+    resource: request2.resource
   };
 }
 var init_RequestThumbprint = __esm({
@@ -5615,10 +5615,10 @@ var init_ThrottlingUtils = __esm({
         const currentSeconds = Date.now() / 1e3;
         return Math.floor(Math.min(currentSeconds + (time3 || DEFAULT_THROTTLE_TIME_SECONDS), currentSeconds + DEFAULT_MAX_THROTTLE_TIME_SECONDS) * 1e3);
       }
-      static removeThrottle(cacheManager, clientId, request, homeAccountIdentifier) {
-        const thumbprint = getRequestThumbprint(clientId, request, homeAccountIdentifier);
+      static removeThrottle(cacheManager, clientId, request2, homeAccountIdentifier) {
+        const thumbprint = getRequestThumbprint(clientId, request2, homeAccountIdentifier);
         const key = this.generateThrottlingStorageKey(thumbprint);
-        cacheManager.removeItem(key, request.correlationId);
+        cacheManager.removeItem(key, request2.correlationId);
       }
     };
   }
@@ -5675,16 +5675,16 @@ function createTokenRequestHeaders(logger, preventCorsPreflight, ccsCred) {
   }
   return headers;
 }
-function createTokenQueryParameters(request, clientId, redirectUri, performanceClient) {
+function createTokenQueryParameters(request2, clientId, redirectUri, performanceClient) {
   const parameters = /* @__PURE__ */ new Map();
-  if (request.embeddedClientId) {
+  if (request2.embeddedClientId) {
     addBrokerParameters(parameters, clientId, redirectUri);
   }
-  if (request.extraQueryParameters) {
-    addExtraParameters(parameters, request.extraQueryParameters);
+  if (request2.extraQueryParameters) {
+    addExtraParameters(parameters, request2.extraQueryParameters);
   }
-  addCorrelationId(parameters, request.correlationId);
-  instrumentBrokerParams(parameters, request.correlationId, performanceClient);
+  addCorrelationId(parameters, request2.correlationId);
+  instrumentBrokerParams(parameters, request2.correlationId, performanceClient);
   return mapToQueryString(parameters);
 }
 async function executePostToTokenEndpoint(tokenEndpoint, queryString, headers, thumbprint, correlationId, cacheManager, networkClient, logger, performanceClient, serverTelemetryManager) {
@@ -5792,19 +5792,19 @@ var init_AuthorizationCodeClient = __esm({
        * authorization_code_grant
        * @param request
        */
-      async acquireToken(request, apiId, authCodePayload) {
-        if (!request.code) {
-          throw createClientAuthError(requestCannotBeMade, request.correlationId);
+      async acquireToken(request2, apiId, authCodePayload) {
+        if (!request2.code) {
+          throw createClientAuthError(requestCannotBeMade, request2.correlationId);
         }
         if (authCodePayload && authCodePayload.cloud_instance_host_name) {
-          await invokeAsync(this.updateTokenEndpointAuthority.bind(this), UpdateTokenEndpointAuthority, this.logger, this.performanceClient, request.correlationId)(authCodePayload.cloud_instance_host_name, request.correlationId);
+          await invokeAsync(this.updateTokenEndpointAuthority.bind(this), UpdateTokenEndpointAuthority, this.logger, this.performanceClient, request2.correlationId)(authCodePayload.cloud_instance_host_name, request2.correlationId);
         }
         const reqTimestamp = nowSeconds();
-        const response = await invokeAsync(this.executeTokenRequest.bind(this), AuthClientExecuteTokenRequest, this.logger, this.performanceClient, request.correlationId)(this.authority, request, this.serverTelemetryManager);
+        const response = await invokeAsync(this.executeTokenRequest.bind(this), AuthClientExecuteTokenRequest, this.logger, this.performanceClient, request2.correlationId)(this.authority, request2, this.serverTelemetryManager);
         const requestId = response.headers?.[HeaderNames.X_MS_REQUEST_ID];
         const responseHandler = new ResponseHandler(this.config.authOptions.clientId, this.cacheManager, this.cryptoUtils, this.logger, this.performanceClient, this.config.serializableCache, this.config.persistencePlugin);
-        responseHandler.validateTokenResponse(response.body, request.correlationId);
-        return invokeAsync(responseHandler.handleServerTokenResponse.bind(responseHandler), HandleServerTokenResponse, this.logger, this.performanceClient, request.correlationId)(response.body, this.authority, reqTimestamp, request, apiId, authCodePayload, void 0, void 0, void 0, requestId);
+        responseHandler.validateTokenResponse(response.body, request2.correlationId);
+        return invokeAsync(responseHandler.handleServerTokenResponse.bind(responseHandler), HandleServerTokenResponse, this.logger, this.performanceClient, request2.correlationId)(response.body, this.authority, reqTimestamp, request2, apiId, authCodePayload, void 0, void 0, void 0, requestId);
       }
       /**
        * Used to log out the current user, and redirect the user to the postLogoutRedirectUri.
@@ -5823,92 +5823,92 @@ var init_AuthorizationCodeClient = __esm({
        * @param authority
        * @param request
        */
-      async executeTokenRequest(authority, request, serverTelemetryManager) {
-        const queryParametersString = createTokenQueryParameters(request, this.config.authOptions.clientId, this.config.authOptions.redirectUri, this.performanceClient);
-        const endpoint = UrlString.appendQueryString(authority.tokenEndpoint, queryParametersString);
-        const requestBody = await invokeAsync(this.createTokenRequestBody.bind(this), AuthClientCreateTokenRequestBody, this.logger, this.performanceClient, request.correlationId)(request);
+      async executeTokenRequest(authority, request2, serverTelemetryManager) {
+        const queryParametersString = createTokenQueryParameters(request2, this.config.authOptions.clientId, this.config.authOptions.redirectUri, this.performanceClient);
+        const endpoint2 = UrlString.appendQueryString(authority.tokenEndpoint, queryParametersString);
+        const requestBody = await invokeAsync(this.createTokenRequestBody.bind(this), AuthClientCreateTokenRequestBody, this.logger, this.performanceClient, request2.correlationId)(request2);
         let ccsCredential = void 0;
-        if (request.clientInfo) {
+        if (request2.clientInfo) {
           try {
-            const clientInfo = buildClientInfo(request.clientInfo, this.cryptoUtils.base64Decode);
+            const clientInfo = buildClientInfo(request2.clientInfo, this.cryptoUtils.base64Decode);
             ccsCredential = {
               credential: `${clientInfo.uid}${CLIENT_INFO_SEPARATOR}${clientInfo.utid}`,
               type: CcsCredentialType.HOME_ACCOUNT_ID
             };
           } catch (e) {
-            this.logger.verbose(`Could not parse client info for CCS Header: '${e}'`, request.correlationId);
+            this.logger.verbose(`Could not parse client info for CCS Header: '${e}'`, request2.correlationId);
           }
         }
-        const headers = createTokenRequestHeaders(this.logger, this.config.systemOptions.preventCorsPreflight, ccsCredential || request.ccsCredential);
-        const thumbprint = getRequestThumbprint(this.config.authOptions.clientId, request);
-        return invokeAsync(executePostToTokenEndpoint, AuthorizationCodeClientExecutePostToTokenEndpoint, this.logger, this.performanceClient, request.correlationId)(endpoint, requestBody, headers, thumbprint, request.correlationId, this.cacheManager, this.networkClient, this.logger, this.performanceClient, serverTelemetryManager);
+        const headers = createTokenRequestHeaders(this.logger, this.config.systemOptions.preventCorsPreflight, ccsCredential || request2.ccsCredential);
+        const thumbprint = getRequestThumbprint(this.config.authOptions.clientId, request2);
+        return invokeAsync(executePostToTokenEndpoint, AuthorizationCodeClientExecutePostToTokenEndpoint, this.logger, this.performanceClient, request2.correlationId)(endpoint2, requestBody, headers, thumbprint, request2.correlationId, this.cacheManager, this.networkClient, this.logger, this.performanceClient, serverTelemetryManager);
       }
       /**
        * Generates a map for all the params to be sent to the service
        * @param request
        */
-      async createTokenRequestBody(request) {
+      async createTokenRequestBody(request2) {
         const parameters = /* @__PURE__ */ new Map();
-        addClientId(parameters, request.embeddedClientId || request.extraParameters?.[CLIENT_ID] || this.config.authOptions.clientId);
+        addClientId(parameters, request2.embeddedClientId || request2.extraParameters?.[CLIENT_ID] || this.config.authOptions.clientId);
         if (!this.includeRedirectUri) {
-          if (!request.redirectUri) {
-            throw createClientConfigurationError(redirectUriEmpty, request.correlationId);
+          if (!request2.redirectUri) {
+            throw createClientConfigurationError(redirectUriEmpty, request2.correlationId);
           }
         } else {
-          addRedirectUri(parameters, request.redirectUri);
+          addRedirectUri(parameters, request2.redirectUri);
         }
-        addScopes(parameters, request.scopes, request.correlationId, true, this.oidcDefaultScopes);
-        addResource(parameters, request.resource);
-        addAuthorizationCode(parameters, request.code);
+        addScopes(parameters, request2.scopes, request2.correlationId, true, this.oidcDefaultScopes);
+        addResource(parameters, request2.resource);
+        addAuthorizationCode(parameters, request2.code);
         addLibraryInfo(parameters, this.config.libraryInfo);
         addApplicationTelemetry(parameters, this.config.telemetry.application);
         addThrottling(parameters);
         if (this.serverTelemetryManager && !isOidcProtocolMode(this.config)) {
           addServerTelemetry(parameters, this.serverTelemetryManager);
         }
-        if (request.codeVerifier) {
-          addCodeVerifier(parameters, request.codeVerifier);
+        if (request2.codeVerifier) {
+          addCodeVerifier(parameters, request2.codeVerifier);
         }
         if (this.config.clientCredentials.clientSecret) {
           addClientSecret(parameters, this.config.clientCredentials.clientSecret);
         }
         if (this.config.clientCredentials.clientAssertion) {
           const clientAssertion = this.config.clientCredentials.clientAssertion;
-          addClientAssertion(parameters, await getClientAssertion(clientAssertion.assertion, this.config.authOptions.clientId, request.resourceRequestUri));
+          addClientAssertion(parameters, await getClientAssertion(clientAssertion.assertion, this.config.authOptions.clientId, request2.resourceRequestUri));
           addClientAssertionType(parameters, clientAssertion.assertionType);
         }
         addGrantType(parameters, GrantType.AUTHORIZATION_CODE_GRANT);
         addClientInfo(parameters);
-        if (request.authenticationScheme === AuthenticationScheme.POP) {
+        if (request2.authenticationScheme === AuthenticationScheme.POP) {
           const popTokenGenerator = new PopTokenGenerator(this.cryptoUtils, this.performanceClient);
           let reqCnfData;
-          if (!request.popKid) {
-            const generatedReqCnfData = await invokeAsync(popTokenGenerator.generateCnf.bind(popTokenGenerator), PopTokenGenerateCnf, this.logger, this.performanceClient, request.correlationId)(request, this.logger);
+          if (!request2.popKid) {
+            const generatedReqCnfData = await invokeAsync(popTokenGenerator.generateCnf.bind(popTokenGenerator), PopTokenGenerateCnf, this.logger, this.performanceClient, request2.correlationId)(request2, this.logger);
             reqCnfData = generatedReqCnfData.reqCnfString;
           } else {
-            reqCnfData = this.cryptoUtils.encodeKid(request.popKid);
+            reqCnfData = this.cryptoUtils.encodeKid(request2.popKid);
           }
           addPopToken(parameters, reqCnfData);
-        } else if (request.authenticationScheme === AuthenticationScheme.SSH) {
-          if (request.sshJwk) {
-            addSshJwk(parameters, request.sshJwk);
+        } else if (request2.authenticationScheme === AuthenticationScheme.SSH) {
+          if (request2.sshJwk) {
+            addSshJwk(parameters, request2.sshJwk);
           } else {
-            throw createClientConfigurationError(missingSshJwk, request.correlationId);
+            throw createClientConfigurationError(missingSshJwk, request2.correlationId);
           }
         }
         let ccsCred = void 0;
-        if (request.clientInfo) {
+        if (request2.clientInfo) {
           try {
-            const clientInfo = buildClientInfo(request.clientInfo, this.cryptoUtils.base64Decode);
+            const clientInfo = buildClientInfo(request2.clientInfo, this.cryptoUtils.base64Decode);
             ccsCred = {
               credential: `${clientInfo.uid}${CLIENT_INFO_SEPARATOR}${clientInfo.utid}`,
               type: CcsCredentialType.HOME_ACCOUNT_ID
             };
           } catch (e) {
-            this.logger.verbose(`Could not parse client info for CCS Header: '${e}'`, request.correlationId);
+            this.logger.verbose(`Could not parse client info for CCS Header: '${e}'`, request2.correlationId);
           }
         } else {
-          ccsCred = request.ccsCredential;
+          ccsCred = request2.ccsCredential;
         }
         if (this.config.systemOptions.preventCorsPreflight && ccsCred) {
           switch (ccsCred.type) {
@@ -5917,7 +5917,7 @@ var init_AuthorizationCodeClient = __esm({
                 const clientInfo = buildClientInfoFromHomeAccountId(ccsCred.credential);
                 addCcsOid(parameters, clientInfo);
               } catch (e) {
-                this.logger.verbose(`Could not parse home account ID for CCS Header: '${e}'`, request.correlationId);
+                this.logger.verbose(`Could not parse home account ID for CCS Header: '${e}'`, request2.correlationId);
               }
               break;
             case CcsCredentialType.UPN:
@@ -5925,44 +5925,44 @@ var init_AuthorizationCodeClient = __esm({
               break;
           }
         }
-        if (request.embeddedClientId) {
+        if (request2.embeddedClientId) {
           addBrokerParameters(parameters, this.config.authOptions.clientId, this.config.authOptions.redirectUri);
         }
-        if (request.extraParameters) {
-          addExtraParameters(parameters, request.extraParameters);
+        if (request2.extraParameters) {
+          addExtraParameters(parameters, request2.extraParameters);
         }
-        if (request.enableSpaAuthorizationCode && (!request.extraParameters || !request.extraParameters[RETURN_SPA_CODE])) {
+        if (request2.enableSpaAuthorizationCode && (!request2.extraParameters || !request2.extraParameters[RETURN_SPA_CODE])) {
           addExtraParameters(parameters, {
             [RETURN_SPA_CODE]: "1"
           });
         }
-        instrumentBrokerParams(parameters, request.correlationId, this.performanceClient);
-        addClaims(parameters, request.correlationId, request.claims, this.config.authOptions.clientCapabilities, request.skipBrokerClaims);
+        instrumentBrokerParams(parameters, request2.correlationId, this.performanceClient);
+        addClaims(parameters, request2.correlationId, request2.claims, this.config.authOptions.clientCapabilities, request2.skipBrokerClaims);
         return mapToQueryString(parameters);
       }
       /**
        * This API validates the `EndSessionRequest` and creates a URL
        * @param request
        */
-      createLogoutUrlQueryString(request) {
+      createLogoutUrlQueryString(request2) {
         const parameters = /* @__PURE__ */ new Map();
-        if (request.postLogoutRedirectUri) {
-          addPostLogoutRedirectUri(parameters, request.postLogoutRedirectUri);
+        if (request2.postLogoutRedirectUri) {
+          addPostLogoutRedirectUri(parameters, request2.postLogoutRedirectUri);
         }
-        if (request.correlationId) {
-          addCorrelationId(parameters, request.correlationId);
+        if (request2.correlationId) {
+          addCorrelationId(parameters, request2.correlationId);
         }
-        if (request.idTokenHint) {
-          addIdTokenHint(parameters, request.idTokenHint);
+        if (request2.idTokenHint) {
+          addIdTokenHint(parameters, request2.idTokenHint);
         }
-        if (request.state) {
-          addState(parameters, request.state);
+        if (request2.state) {
+          addState(parameters, request2.state);
         }
-        if (request.logoutHint) {
-          addLogoutHint(parameters, request.logoutHint);
+        if (request2.logoutHint) {
+          addLogoutHint(parameters, request2.logoutHint);
         }
-        if (request.extraQueryParameters) {
-          addExtraParameters(parameters, request.extraQueryParameters);
+        if (request2.extraQueryParameters) {
+          addExtraParameters(parameters, request2.extraQueryParameters);
         }
         if (this.config.authOptions.instanceAware) {
           addInstanceAware(parameters);
@@ -5991,97 +5991,97 @@ __export(Authorize_exports, {
   getStandardAuthorizeRequestParameters: () => getStandardAuthorizeRequestParameters,
   validateAuthorizationResponse: () => validateAuthorizationResponse
 });
-function getStandardAuthorizeRequestParameters(authOptions, request, logger, performanceClient) {
-  const correlationId = request.correlationId;
+function getStandardAuthorizeRequestParameters(authOptions, request2, logger, performanceClient) {
+  const correlationId = request2.correlationId;
   const parameters = /* @__PURE__ */ new Map();
-  addClientId(parameters, request.embeddedClientId || request.extraQueryParameters?.[CLIENT_ID] || authOptions.clientId);
+  addClientId(parameters, request2.embeddedClientId || request2.extraQueryParameters?.[CLIENT_ID] || authOptions.clientId);
   const requestScopes = [
-    ...request.scopes || [],
-    ...request.extraScopesToConsent || []
+    ...request2.scopes || [],
+    ...request2.extraScopesToConsent || []
   ];
-  addScopes(parameters, requestScopes, request.correlationId, true, authOptions.authority.options.OIDCOptions?.defaultScopes);
-  addResource(parameters, request.resource);
-  addRedirectUri(parameters, request.redirectUri);
+  addScopes(parameters, requestScopes, request2.correlationId, true, authOptions.authority.options.OIDCOptions?.defaultScopes);
+  addResource(parameters, request2.resource);
+  addRedirectUri(parameters, request2.redirectUri);
   addCorrelationId(parameters, correlationId);
-  addResponseMode(parameters, request.responseMode);
+  addResponseMode(parameters, request2.responseMode);
   addClientInfo(parameters);
   addCliData(parameters);
-  if (request.prompt) {
-    addPrompt(parameters, request.prompt);
-    performanceClient?.addFields({ prompt: request.prompt }, correlationId);
+  if (request2.prompt) {
+    addPrompt(parameters, request2.prompt);
+    performanceClient?.addFields({ prompt: request2.prompt }, correlationId);
   }
-  if (request.domainHint) {
-    addDomainHint(parameters, request.domainHint);
+  if (request2.domainHint) {
+    addDomainHint(parameters, request2.domainHint);
     performanceClient?.addFields({ domainHintFromRequest: true }, correlationId);
   }
-  if (request.prompt !== PromptValue.SELECT_ACCOUNT) {
-    if (request.sid && request.prompt === PromptValue.NONE) {
-      logger.verbose("createAuthCodeUrlQueryString: Prompt is none, adding sid from request", request.correlationId);
-      addSid(parameters, request.sid);
+  if (request2.prompt !== PromptValue.SELECT_ACCOUNT) {
+    if (request2.sid && request2.prompt === PromptValue.NONE) {
+      logger.verbose("createAuthCodeUrlQueryString: Prompt is none, adding sid from request", request2.correlationId);
+      addSid(parameters, request2.sid);
       performanceClient?.addFields({ sidFromRequest: true }, correlationId);
-    } else if (request.account) {
-      const accountSid = extractAccountSid(request.account);
-      let accountLoginHintClaim = extractLoginHint(request.account);
-      if (accountLoginHintClaim && request.domainHint) {
-        logger.warning(`AuthorizationCodeClient.createAuthCodeUrlQueryString: "domainHint" param is set, skipping opaque "login_hint" claim. Please consider not passing domainHint`, request.correlationId);
+    } else if (request2.account) {
+      const accountSid = extractAccountSid(request2.account);
+      let accountLoginHintClaim = extractLoginHint(request2.account);
+      if (accountLoginHintClaim && request2.domainHint) {
+        logger.warning(`AuthorizationCodeClient.createAuthCodeUrlQueryString: "domainHint" param is set, skipping opaque "login_hint" claim. Please consider not passing domainHint`, request2.correlationId);
         accountLoginHintClaim = null;
       }
       if (accountLoginHintClaim) {
-        logger.verbose("createAuthCodeUrlQueryString: login_hint claim present on account", request.correlationId);
+        logger.verbose("createAuthCodeUrlQueryString: login_hint claim present on account", request2.correlationId);
         addLoginHint(parameters, accountLoginHintClaim);
         performanceClient?.addFields({ loginHintFromClaim: true }, correlationId);
         try {
-          const clientInfo = buildClientInfoFromHomeAccountId(request.account.homeAccountId);
+          const clientInfo = buildClientInfoFromHomeAccountId(request2.account.homeAccountId);
           addCcsOid(parameters, clientInfo);
         } catch (e) {
-          logger.verbose("createAuthCodeUrlQueryString: Could not parse home account ID for CCS Header", request.correlationId);
+          logger.verbose("createAuthCodeUrlQueryString: Could not parse home account ID for CCS Header", request2.correlationId);
         }
-      } else if (accountSid && request.prompt === PromptValue.NONE) {
-        logger.verbose("createAuthCodeUrlQueryString: Prompt is none, adding sid from account", request.correlationId);
+      } else if (accountSid && request2.prompt === PromptValue.NONE) {
+        logger.verbose("createAuthCodeUrlQueryString: Prompt is none, adding sid from account", request2.correlationId);
         addSid(parameters, accountSid);
         performanceClient?.addFields({ sidFromClaim: true }, correlationId);
         try {
-          const clientInfo = buildClientInfoFromHomeAccountId(request.account.homeAccountId);
+          const clientInfo = buildClientInfoFromHomeAccountId(request2.account.homeAccountId);
           addCcsOid(parameters, clientInfo);
         } catch (e) {
-          logger.verbose("createAuthCodeUrlQueryString: Could not parse home account ID for CCS Header", request.correlationId);
+          logger.verbose("createAuthCodeUrlQueryString: Could not parse home account ID for CCS Header", request2.correlationId);
         }
-      } else if (request.loginHint) {
-        logger.verbose("createAuthCodeUrlQueryString: Adding login_hint from request", request.correlationId);
-        addLoginHint(parameters, request.loginHint);
-        addCcsUpn(parameters, request.loginHint);
+      } else if (request2.loginHint) {
+        logger.verbose("createAuthCodeUrlQueryString: Adding login_hint from request", request2.correlationId);
+        addLoginHint(parameters, request2.loginHint);
+        addCcsUpn(parameters, request2.loginHint);
         performanceClient?.addFields({ loginHintFromRequest: true }, correlationId);
-      } else if (request.account.username) {
-        logger.verbose("createAuthCodeUrlQueryString: Adding login_hint from account", request.correlationId);
-        addLoginHint(parameters, request.account.username);
+      } else if (request2.account.username) {
+        logger.verbose("createAuthCodeUrlQueryString: Adding login_hint from account", request2.correlationId);
+        addLoginHint(parameters, request2.account.username);
         performanceClient?.addFields({ loginHintFromUpn: true }, correlationId);
         try {
-          const clientInfo = buildClientInfoFromHomeAccountId(request.account.homeAccountId);
+          const clientInfo = buildClientInfoFromHomeAccountId(request2.account.homeAccountId);
           addCcsOid(parameters, clientInfo);
         } catch (e) {
-          logger.verbose("createAuthCodeUrlQueryString: Could not parse home account ID for CCS Header", request.correlationId);
+          logger.verbose("createAuthCodeUrlQueryString: Could not parse home account ID for CCS Header", request2.correlationId);
         }
       }
-    } else if (request.loginHint) {
-      logger.verbose("createAuthCodeUrlQueryString: No account, adding login_hint from request", request.correlationId);
-      addLoginHint(parameters, request.loginHint);
-      addCcsUpn(parameters, request.loginHint);
+    } else if (request2.loginHint) {
+      logger.verbose("createAuthCodeUrlQueryString: No account, adding login_hint from request", request2.correlationId);
+      addLoginHint(parameters, request2.loginHint);
+      addCcsUpn(parameters, request2.loginHint);
       performanceClient?.addFields({ loginHintFromRequest: true }, correlationId);
     }
   } else {
-    logger.verbose("createAuthCodeUrlQueryString: Prompt is select_account, ignoring account hints", request.correlationId);
+    logger.verbose("createAuthCodeUrlQueryString: Prompt is select_account, ignoring account hints", request2.correlationId);
   }
-  if (request.nonce) {
-    addNonce(parameters, request.nonce);
+  if (request2.nonce) {
+    addNonce(parameters, request2.nonce);
   }
-  if (request.state) {
-    addState(parameters, request.state);
+  if (request2.state) {
+    addState(parameters, request2.state);
   }
-  if (request.embeddedClientId) {
+  if (request2.embeddedClientId) {
     addBrokerParameters(parameters, authOptions.clientId, authOptions.redirectUri);
   }
-  addClaims(parameters, request.correlationId, request.claims, authOptions.clientCapabilities, request.skipBrokerClaims);
-  if (authOptions.instanceAware && (!request.extraQueryParameters || !Object.keys(request.extraQueryParameters).includes(INSTANCE_AWARE))) {
+  addClaims(parameters, request2.correlationId, request2.claims, authOptions.clientCapabilities, request2.skipBrokerClaims);
+  if (authOptions.instanceAware && (!request2.extraQueryParameters || !Object.keys(request2.extraQueryParameters).includes(INSTANCE_AWARE))) {
     addInstanceAware(parameters);
   }
   return parameters;
@@ -6193,77 +6193,77 @@ var init_RefreshTokenClient = __esm({
         this.authority = this.config.authOptions.authority;
         this.performanceClient = performanceClient;
       }
-      async acquireToken(request, apiId) {
+      async acquireToken(request2, apiId) {
         const reqTimestamp = nowSeconds();
-        const response = await invokeAsync(this.executeTokenRequest.bind(this), RefreshTokenClientExecuteTokenRequest, this.logger, this.performanceClient, request.correlationId)(request, this.authority);
+        const response = await invokeAsync(this.executeTokenRequest.bind(this), RefreshTokenClientExecuteTokenRequest, this.logger, this.performanceClient, request2.correlationId)(request2, this.authority);
         const requestId = response.headers?.[HeaderNames.X_MS_REQUEST_ID];
         const responseHandler = new ResponseHandler(this.config.authOptions.clientId, this.cacheManager, this.cryptoUtils, this.logger, this.performanceClient, this.config.serializableCache, this.config.persistencePlugin);
-        responseHandler.validateTokenResponse(response.body, request.correlationId);
-        return invokeAsync(responseHandler.handleServerTokenResponse.bind(responseHandler), HandleServerTokenResponse, this.logger, this.performanceClient, request.correlationId)(response.body, this.authority, reqTimestamp, request, apiId, void 0, void 0, true, request.forceCache, requestId);
+        responseHandler.validateTokenResponse(response.body, request2.correlationId);
+        return invokeAsync(responseHandler.handleServerTokenResponse.bind(responseHandler), HandleServerTokenResponse, this.logger, this.performanceClient, request2.correlationId)(response.body, this.authority, reqTimestamp, request2, apiId, void 0, void 0, true, request2.forceCache, requestId);
       }
       /**
        * Gets cached refresh token and attaches to request, then calls acquireToken API
        * @param request
        */
-      async acquireTokenByRefreshToken(request, apiId) {
-        if (!request) {
+      async acquireTokenByRefreshToken(request2, apiId) {
+        if (!request2) {
           throw createClientConfigurationError(tokenRequestEmpty, "");
         }
-        if (!request.account) {
-          throw createClientAuthError(noAccountInSilentRequest, request.correlationId);
+        if (!request2.account) {
+          throw createClientAuthError(noAccountInSilentRequest, request2.correlationId);
         }
-        const isFOCI = this.cacheManager.isAppMetadataFOCI(request.account.environment, request.correlationId);
+        const isFOCI = this.cacheManager.isAppMetadataFOCI(request2.account.environment, request2.correlationId);
         if (isFOCI) {
           try {
-            return await invokeAsync(this.acquireTokenWithCachedRefreshToken.bind(this), RefreshTokenClientAcquireTokenWithCachedRefreshToken, this.logger, this.performanceClient, request.correlationId)(request, true, apiId);
+            return await invokeAsync(this.acquireTokenWithCachedRefreshToken.bind(this), RefreshTokenClientAcquireTokenWithCachedRefreshToken, this.logger, this.performanceClient, request2.correlationId)(request2, true, apiId);
           } catch (e) {
             const noFamilyRTInCache = e instanceof InteractionRequiredAuthError && e.errorCode === noTokensFound;
             const clientMismatchErrorWithFamilyRT = e instanceof ServerError && e.errorCode === INVALID_GRANT_ERROR && e.subError === CLIENT_MISMATCH_ERROR;
             if (noFamilyRTInCache || clientMismatchErrorWithFamilyRT) {
-              return invokeAsync(this.acquireTokenWithCachedRefreshToken.bind(this), RefreshTokenClientAcquireTokenWithCachedRefreshToken, this.logger, this.performanceClient, request.correlationId)(request, false, apiId);
+              return invokeAsync(this.acquireTokenWithCachedRefreshToken.bind(this), RefreshTokenClientAcquireTokenWithCachedRefreshToken, this.logger, this.performanceClient, request2.correlationId)(request2, false, apiId);
             } else {
               throw e;
             }
           }
         }
-        return invokeAsync(this.acquireTokenWithCachedRefreshToken.bind(this), RefreshTokenClientAcquireTokenWithCachedRefreshToken, this.logger, this.performanceClient, request.correlationId)(request, false, apiId);
+        return invokeAsync(this.acquireTokenWithCachedRefreshToken.bind(this), RefreshTokenClientAcquireTokenWithCachedRefreshToken, this.logger, this.performanceClient, request2.correlationId)(request2, false, apiId);
       }
       /**
        * makes a network call to acquire tokens by exchanging RefreshToken available in userCache; throws if refresh token is not cached
        * @param request
        */
-      async acquireTokenWithCachedRefreshToken(request, foci, apiId) {
-        const refreshToken = invoke(this.cacheManager.getRefreshToken.bind(this.cacheManager), CacheManagerGetRefreshToken, this.logger, this.performanceClient, request.correlationId)(request.account, foci, request.correlationId, void 0);
+      async acquireTokenWithCachedRefreshToken(request2, foci, apiId) {
+        const refreshToken = invoke(this.cacheManager.getRefreshToken.bind(this.cacheManager), CacheManagerGetRefreshToken, this.logger, this.performanceClient, request2.correlationId)(request2.account, foci, request2.correlationId, void 0);
         if (!refreshToken) {
-          throw createInteractionRequiredAuthError(noTokensFound, request.correlationId);
+          throw createInteractionRequiredAuthError(noTokensFound, request2.correlationId);
         }
         if (refreshToken.expiresOn) {
-          const offset = request.refreshTokenExpirationOffsetSeconds || DEFAULT_REFRESH_TOKEN_EXPIRATION_OFFSET_SECONDS;
+          const offset = request2.refreshTokenExpirationOffsetSeconds || DEFAULT_REFRESH_TOKEN_EXPIRATION_OFFSET_SECONDS;
           this.performanceClient?.addFields({
             cacheRtExpiresOnSeconds: Number(refreshToken.expiresOn),
             rtOffsetSeconds: offset
-          }, request.correlationId);
+          }, request2.correlationId);
           if (isTokenExpired(refreshToken.expiresOn, offset)) {
-            throw createInteractionRequiredAuthError(refreshTokenExpired, request.correlationId);
+            throw createInteractionRequiredAuthError(refreshTokenExpired, request2.correlationId);
           }
         }
         const refreshTokenRequest = {
-          ...request,
+          ...request2,
           refreshToken: refreshToken.secret,
-          authenticationScheme: request.authenticationScheme || AuthenticationScheme.BEARER,
+          authenticationScheme: request2.authenticationScheme || AuthenticationScheme.BEARER,
           ccsCredential: {
-            credential: request.account.homeAccountId,
+            credential: request2.account.homeAccountId,
             type: CcsCredentialType.HOME_ACCOUNT_ID
           }
         };
         try {
-          return await invokeAsync(this.acquireToken.bind(this), RefreshTokenClientAcquireToken, this.logger, this.performanceClient, request.correlationId)(refreshTokenRequest, apiId);
+          return await invokeAsync(this.acquireToken.bind(this), RefreshTokenClientAcquireToken, this.logger, this.performanceClient, request2.correlationId)(refreshTokenRequest, apiId);
         } catch (e) {
           if (e instanceof InteractionRequiredAuthError) {
             if (e.subError === badToken) {
-              this.logger.verbose("acquireTokenWithRefreshToken: bad refresh token, removing from cache", request.correlationId);
+              this.logger.verbose("acquireTokenWithRefreshToken: bad refresh token, removing from cache", request2.correlationId);
               const badRefreshTokenKey = this.cacheManager.generateCredentialKey(refreshToken);
-              this.cacheManager.removeRefreshToken(badRefreshTokenKey, request.correlationId);
+              this.cacheManager.removeRefreshToken(badRefreshTokenKey, request2.correlationId);
             }
           }
           throw e;
@@ -6274,25 +6274,25 @@ var init_RefreshTokenClient = __esm({
        * @param request
        * @param authority
        */
-      async executeTokenRequest(request, authority) {
-        const queryParametersString = createTokenQueryParameters(request, this.config.authOptions.clientId, this.config.authOptions.redirectUri, this.performanceClient);
-        const endpoint = UrlString.appendQueryString(authority.tokenEndpoint, queryParametersString);
-        const requestBody = await invokeAsync(this.createTokenRequestBody.bind(this), RefreshTokenClientCreateTokenRequestBody, this.logger, this.performanceClient, request.correlationId)(request);
-        const headers = createTokenRequestHeaders(this.logger, this.config.systemOptions.preventCorsPreflight, request.ccsCredential);
-        const thumbprint = getRequestThumbprint(this.config.authOptions.clientId, request);
-        return invokeAsync(executePostToTokenEndpoint, RefreshTokenClientExecutePostToTokenEndpoint, this.logger, this.performanceClient, request.correlationId)(endpoint, requestBody, headers, thumbprint, request.correlationId, this.cacheManager, this.networkClient, this.logger, this.performanceClient, this.serverTelemetryManager);
+      async executeTokenRequest(request2, authority) {
+        const queryParametersString = createTokenQueryParameters(request2, this.config.authOptions.clientId, this.config.authOptions.redirectUri, this.performanceClient);
+        const endpoint2 = UrlString.appendQueryString(authority.tokenEndpoint, queryParametersString);
+        const requestBody = await invokeAsync(this.createTokenRequestBody.bind(this), RefreshTokenClientCreateTokenRequestBody, this.logger, this.performanceClient, request2.correlationId)(request2);
+        const headers = createTokenRequestHeaders(this.logger, this.config.systemOptions.preventCorsPreflight, request2.ccsCredential);
+        const thumbprint = getRequestThumbprint(this.config.authOptions.clientId, request2);
+        return invokeAsync(executePostToTokenEndpoint, RefreshTokenClientExecutePostToTokenEndpoint, this.logger, this.performanceClient, request2.correlationId)(endpoint2, requestBody, headers, thumbprint, request2.correlationId, this.cacheManager, this.networkClient, this.logger, this.performanceClient, this.serverTelemetryManager);
       }
       /**
        * Helper function to create the token request body
        * @param request
        */
-      async createTokenRequestBody(request) {
+      async createTokenRequestBody(request2) {
         const parameters = /* @__PURE__ */ new Map();
-        addClientId(parameters, request.embeddedClientId || request.extraParameters?.[CLIENT_ID] || this.config.authOptions.clientId);
-        if (request.redirectUri) {
-          addRedirectUri(parameters, request.redirectUri);
+        addClientId(parameters, request2.embeddedClientId || request2.extraParameters?.[CLIENT_ID] || this.config.authOptions.clientId);
+        if (request2.redirectUri) {
+          addRedirectUri(parameters, request2.redirectUri);
         }
-        addScopes(parameters, request.scopes, request.correlationId, true, this.config.authOptions.authority.options.OIDCOptions?.defaultScopes);
+        addScopes(parameters, request2.scopes, request2.correlationId, true, this.config.authOptions.authority.options.OIDCOptions?.defaultScopes);
         addGrantType(parameters, GrantType.REFRESH_TOKEN_GRANT);
         addClientInfo(parameters);
         addLibraryInfo(parameters, this.config.libraryInfo);
@@ -6301,57 +6301,57 @@ var init_RefreshTokenClient = __esm({
         if (this.serverTelemetryManager && !isOidcProtocolMode(this.config)) {
           addServerTelemetry(parameters, this.serverTelemetryManager);
         }
-        addRefreshToken(parameters, request.refreshToken);
+        addRefreshToken(parameters, request2.refreshToken);
         if (this.config.clientCredentials.clientSecret) {
           addClientSecret(parameters, this.config.clientCredentials.clientSecret);
         }
         if (this.config.clientCredentials.clientAssertion) {
           const clientAssertion = this.config.clientCredentials.clientAssertion;
-          addClientAssertion(parameters, await getClientAssertion(clientAssertion.assertion, this.config.authOptions.clientId, request.resourceRequestUri));
+          addClientAssertion(parameters, await getClientAssertion(clientAssertion.assertion, this.config.authOptions.clientId, request2.resourceRequestUri));
           addClientAssertionType(parameters, clientAssertion.assertionType);
         }
-        if (request.authenticationScheme === AuthenticationScheme.POP) {
+        if (request2.authenticationScheme === AuthenticationScheme.POP) {
           const popTokenGenerator = new PopTokenGenerator(this.cryptoUtils, this.performanceClient);
           let reqCnfData;
-          if (!request.popKid) {
-            const generatedReqCnfData = await invokeAsync(popTokenGenerator.generateCnf.bind(popTokenGenerator), PopTokenGenerateCnf, this.logger, this.performanceClient, request.correlationId)(request, this.logger);
+          if (!request2.popKid) {
+            const generatedReqCnfData = await invokeAsync(popTokenGenerator.generateCnf.bind(popTokenGenerator), PopTokenGenerateCnf, this.logger, this.performanceClient, request2.correlationId)(request2, this.logger);
             reqCnfData = generatedReqCnfData.reqCnfString;
           } else {
-            reqCnfData = this.cryptoUtils.encodeKid(request.popKid);
+            reqCnfData = this.cryptoUtils.encodeKid(request2.popKid);
           }
           addPopToken(parameters, reqCnfData);
-        } else if (request.authenticationScheme === AuthenticationScheme.SSH) {
-          if (request.sshJwk) {
-            addSshJwk(parameters, request.sshJwk);
+        } else if (request2.authenticationScheme === AuthenticationScheme.SSH) {
+          if (request2.sshJwk) {
+            addSshJwk(parameters, request2.sshJwk);
           } else {
-            throw createClientConfigurationError(missingSshJwk, request.correlationId);
+            throw createClientConfigurationError(missingSshJwk, request2.correlationId);
           }
         }
-        if (this.config.systemOptions.preventCorsPreflight && request.ccsCredential) {
-          switch (request.ccsCredential.type) {
+        if (this.config.systemOptions.preventCorsPreflight && request2.ccsCredential) {
+          switch (request2.ccsCredential.type) {
             case CcsCredentialType.HOME_ACCOUNT_ID:
               try {
-                const clientInfo = buildClientInfoFromHomeAccountId(request.ccsCredential.credential);
+                const clientInfo = buildClientInfoFromHomeAccountId(request2.ccsCredential.credential);
                 addCcsOid(parameters, clientInfo);
               } catch (e) {
-                this.logger.verbose(`Could not parse home account ID for CCS Header: '${e}'`, request.correlationId);
+                this.logger.verbose(`Could not parse home account ID for CCS Header: '${e}'`, request2.correlationId);
               }
               break;
             case CcsCredentialType.UPN:
-              addCcsUpn(parameters, request.ccsCredential.credential);
+              addCcsUpn(parameters, request2.ccsCredential.credential);
               break;
           }
         }
-        if (request.embeddedClientId) {
+        if (request2.embeddedClientId) {
           addBrokerParameters(parameters, this.config.authOptions.clientId, this.config.authOptions.redirectUri);
         }
-        if (request.extraParameters) {
+        if (request2.extraParameters) {
           addExtraParameters(parameters, {
-            ...request.extraParameters
+            ...request2.extraParameters
           });
         }
-        instrumentBrokerParams(parameters, request.correlationId, this.performanceClient);
-        addClaims(parameters, request.correlationId, request.claims, this.config.authOptions.clientCapabilities, request.skipBrokerClaims);
+        instrumentBrokerParams(parameters, request2.correlationId, this.performanceClient);
+        addClaims(parameters, request2.correlationId, request2.claims, this.config.authOptions.clientCapabilities, request2.skipBrokerClaims);
         return mapToQueryString(parameters);
       }
     };
@@ -6415,7 +6415,7 @@ var init_ServerTelemetryManager = __esm({
        * API to add MSER Telemetry to request
        */
       generateCurrentRequestHeaderValue() {
-        const request = `${this.apiId}${SERVER_TELEM_VALUE_SEPARATOR}${this.cacheOutcome}`;
+        const request2 = `${this.apiId}${SERVER_TELEM_VALUE_SEPARATOR}${this.cacheOutcome}`;
         const platformFieldsArr = [this.wrapperSKU, this.wrapperVer];
         const nativeBrokerErrorCode = this.getNativeBrokerErrorCode();
         if (nativeBrokerErrorCode?.length) {
@@ -6424,7 +6424,7 @@ var init_ServerTelemetryManager = __esm({
         const platformFields = platformFieldsArr.join(SERVER_TELEM_VALUE_SEPARATOR);
         const regionDiscoveryFields = this.getRegionDiscoveryFields();
         const requestWithRegionDiscoveryFields = [
-          request,
+          request2,
           regionDiscoveryFields
         ].join(SERVER_TELEM_VALUE_SEPARATOR);
         return [
@@ -6628,46 +6628,46 @@ var init_SilentFlowClient = __esm({
        * Retrieves token from cache or throws an error if it must be refreshed.
        * @param request
        */
-      async acquireCachedToken(request) {
+      async acquireCachedToken(request2) {
         let lastCacheOutcome = CacheOutcome.NOT_APPLICABLE;
-        if (request.forceRefresh || !StringUtils.isEmptyObj(request.claims)) {
-          this.setCacheOutcome(CacheOutcome.FORCE_REFRESH_OR_CLAIMS, request.correlationId);
-          throw createClientAuthError(tokenRefreshRequired, request.correlationId);
+        if (request2.forceRefresh || !StringUtils.isEmptyObj(request2.claims)) {
+          this.setCacheOutcome(CacheOutcome.FORCE_REFRESH_OR_CLAIMS, request2.correlationId);
+          throw createClientAuthError(tokenRefreshRequired, request2.correlationId);
         }
-        if (!request.account) {
-          throw createClientAuthError(noAccountInSilentRequest, request.correlationId);
+        if (!request2.account) {
+          throw createClientAuthError(noAccountInSilentRequest, request2.correlationId);
         }
-        const requestTenantId = request.account.tenantId || getTenantFromAuthorityString(request.authority, request.correlationId);
+        const requestTenantId = request2.account.tenantId || getTenantFromAuthorityString(request2.authority, request2.correlationId);
         const tokenKeys = this.cacheManager.getTokenKeys();
-        const cachedAccessToken = this.cacheManager.getAccessToken(request.account, request, tokenKeys, requestTenantId);
+        const cachedAccessToken = this.cacheManager.getAccessToken(request2.account, request2, tokenKeys, requestTenantId);
         if (!cachedAccessToken) {
-          this.setCacheOutcome(CacheOutcome.NO_CACHED_ACCESS_TOKEN, request.correlationId);
-          throw createClientAuthError(tokenRefreshRequired, request.correlationId);
+          this.setCacheOutcome(CacheOutcome.NO_CACHED_ACCESS_TOKEN, request2.correlationId);
+          throw createClientAuthError(tokenRefreshRequired, request2.correlationId);
         } else if (wasClockTurnedBack(cachedAccessToken.cachedAt) || isTokenExpired(cachedAccessToken.expiresOn, this.config.systemOptions.tokenRenewalOffsetSeconds)) {
-          this.setCacheOutcome(CacheOutcome.CACHED_ACCESS_TOKEN_EXPIRED, request.correlationId);
-          throw createClientAuthError(tokenRefreshRequired, request.correlationId);
-        } else if (request.resource) {
-          if (cachedAccessToken.resource !== request.resource) {
-            this.setCacheOutcome(CacheOutcome.NO_CACHED_ACCESS_TOKEN, request.correlationId);
-            throw createClientAuthError(tokenRefreshRequired, request.correlationId);
+          this.setCacheOutcome(CacheOutcome.CACHED_ACCESS_TOKEN_EXPIRED, request2.correlationId);
+          throw createClientAuthError(tokenRefreshRequired, request2.correlationId);
+        } else if (request2.resource) {
+          if (cachedAccessToken.resource !== request2.resource) {
+            this.setCacheOutcome(CacheOutcome.NO_CACHED_ACCESS_TOKEN, request2.correlationId);
+            throw createClientAuthError(tokenRefreshRequired, request2.correlationId);
           }
         } else if (cachedAccessToken.refreshOn && isTokenExpired(cachedAccessToken.refreshOn, 0)) {
           lastCacheOutcome = CacheOutcome.PROACTIVELY_REFRESHED;
         }
-        const environment = request.authority || this.authority.getPreferredCache();
+        const environment = request2.authority || this.authority.getPreferredCache();
         const cacheRecord = {
-          account: this.cacheManager.getAccount(this.cacheManager.generateAccountKey(request.account), request.correlationId),
+          account: this.cacheManager.getAccount(this.cacheManager.generateAccountKey(request2.account), request2.correlationId),
           accessToken: cachedAccessToken,
-          idToken: this.cacheManager.getIdToken(request.account, request.correlationId, tokenKeys, requestTenantId),
+          idToken: this.cacheManager.getIdToken(request2.account, request2.correlationId, tokenKeys, requestTenantId),
           refreshToken: null,
-          appMetadata: this.cacheManager.readAppMetadataFromCache(environment, request.correlationId)
+          appMetadata: this.cacheManager.readAppMetadataFromCache(environment, request2.correlationId)
         };
-        this.setCacheOutcome(lastCacheOutcome, request.correlationId);
+        this.setCacheOutcome(lastCacheOutcome, request2.correlationId);
         if (this.config.serverTelemetryManager) {
           this.config.serverTelemetryManager.incrementCacheHits();
         }
         return [
-          await invokeAsync(this.generateResultFromCacheRecord.bind(this), SilentFlowClientGenerateResultFromCacheRecord, this.logger, this.performanceClient, request.correlationId)(cacheRecord, request),
+          await invokeAsync(this.generateResultFromCacheRecord.bind(this), SilentFlowClientGenerateResultFromCacheRecord, this.logger, this.performanceClient, request2.correlationId)(cacheRecord, request2),
           lastCacheOutcome
         ];
       }
@@ -6684,27 +6684,27 @@ var init_SilentFlowClient = __esm({
        * Helper function to build response object from the CacheRecord
        * @param cacheRecord
        */
-      async generateResultFromCacheRecord(cacheRecord, request) {
+      async generateResultFromCacheRecord(cacheRecord, request2) {
         let idTokenClaims;
         if (cacheRecord.idToken) {
-          idTokenClaims = extractTokenClaims(cacheRecord.idToken.secret, this.config.cryptoInterface.base64Decode, request.correlationId);
+          idTokenClaims = extractTokenClaims(cacheRecord.idToken.secret, this.config.cryptoInterface.base64Decode, request2.correlationId);
         }
-        return ResponseHandler.generateAuthenticationResult(this.cryptoUtils, this.authority, cacheRecord, true, request, this.performanceClient, idTokenClaims);
+        return ResponseHandler.generateAuthenticationResult(this.cryptoUtils, this.authority, cacheRecord, true, request2, this.performanceClient, idTokenClaims);
       }
     };
   }
 });
 
 // node_modules/@azure/msal-common/dist/request/BaseAuthRequest.mjs
-function enforceResourceParameter(isMcp, request) {
+function enforceResourceParameter(isMcp, request2) {
   if (!isMcp) {
     return;
   }
-  if (request.resource && (containsResourceParam(request.extraParameters) || containsResourceParam(request.extraQueryParameters))) {
-    throw createClientAuthError(misplacedResourceParam, request.correlationId || "");
+  if (request2.resource && (containsResourceParam(request2.extraParameters) || containsResourceParam(request2.extraQueryParameters))) {
+    throw createClientAuthError(misplacedResourceParam, request2.correlationId || "");
   }
-  if (!request.resource) {
-    throw createClientAuthError(resourceParameterRequired, request.correlationId || "");
+  if (!request2.resource) {
+    throw createClientAuthError(resourceParameterRequired, request2.correlationId || "");
   }
 }
 function containsResourceParam(params) {
@@ -12474,8 +12474,8 @@ var init_BaseClient = __esm({
        * Creates query string for the /token request
        * @param request
        */
-      createTokenQueryParameters(request) {
-        return Token_exports.createTokenQueryParameters(request, this.config.authOptions.clientId, this.config.authOptions.redirectUri, this.performanceClient);
+      createTokenQueryParameters(request2) {
+        return Token_exports.createTokenQueryParameters(request2, this.config.authOptions.clientId, this.config.authOptions.redirectUri, this.performanceClient);
       }
     };
   }
@@ -12498,13 +12498,13 @@ var init_UsernamePasswordClient = __esm({
        * password_grant
        * @param request - CommonUsernamePasswordRequest
        */
-      async acquireToken(request) {
-        this.logger.info("in acquireToken call in username-password client", request.correlationId);
+      async acquireToken(request2) {
+        this.logger.info("in acquireToken call in username-password client", request2.correlationId);
         const reqTimestamp = TimeUtils_exports.nowSeconds();
-        const response = await this.executeTokenRequest(this.authority, request);
+        const response = await this.executeTokenRequest(this.authority, request2);
         const responseHandler = new ResponseHandler(this.config.authOptions.clientId, this.cacheManager, this.cryptoUtils, this.logger, this.performanceClient, this.config.serializableCache, this.config.persistencePlugin);
-        responseHandler.validateTokenResponse(response.body, request.correlationId);
-        const tokenResponse = responseHandler.handleServerTokenResponse(response.body, this.authority, reqTimestamp, request, ApiId.acquireTokenByUsernamePassword);
+        responseHandler.validateTokenResponse(response.body, request2.correlationId);
+        const tokenResponse = responseHandler.handleServerTokenResponse(response.body, this.authority, reqTimestamp, request2, ApiId.acquireTokenByUsernamePassword);
         return tokenResponse;
       }
       /**
@@ -12512,37 +12512,37 @@ var init_UsernamePasswordClient = __esm({
        * @param authority - authority object
        * @param request - CommonUsernamePasswordRequest provided by the developer
        */
-      async executeTokenRequest(authority, request) {
-        const queryParametersString = this.createTokenQueryParameters(request);
-        const endpoint = UrlString.appendQueryString(authority.tokenEndpoint, queryParametersString);
-        const requestBody = await this.createTokenRequestBody(request);
+      async executeTokenRequest(authority, request2) {
+        const queryParametersString = this.createTokenQueryParameters(request2);
+        const endpoint2 = UrlString.appendQueryString(authority.tokenEndpoint, queryParametersString);
+        const requestBody = await this.createTokenRequestBody(request2);
         const headers = this.createTokenRequestHeaders({
-          credential: request.username,
+          credential: request2.username,
           type: CcsCredentialType.UPN
         });
         const thumbprint = {
           clientId: this.config.authOptions.clientId,
           authority: authority.canonicalAuthority,
-          scopes: request.scopes,
-          claims: request.claims,
-          authenticationScheme: request.authenticationScheme,
-          resourceRequestMethod: request.resourceRequestMethod,
-          resourceRequestUri: request.resourceRequestUri,
-          shrClaims: request.shrClaims,
-          sshKid: request.sshKid
+          scopes: request2.scopes,
+          claims: request2.claims,
+          authenticationScheme: request2.authenticationScheme,
+          resourceRequestMethod: request2.resourceRequestMethod,
+          resourceRequestUri: request2.resourceRequestUri,
+          shrClaims: request2.shrClaims,
+          sshKid: request2.sshKid
         };
-        return this.executePostToTokenEndpoint(endpoint, requestBody, headers, thumbprint, request.correlationId);
+        return this.executePostToTokenEndpoint(endpoint2, requestBody, headers, thumbprint, request2.correlationId);
       }
       /**
        * Generates a map for all the params to be sent to the service
        * @param request - CommonUsernamePasswordRequest provided by the developer
        */
-      async createTokenRequestBody(request) {
+      async createTokenRequestBody(request2) {
         const parameters = /* @__PURE__ */ new Map();
         RequestParameterBuilder_exports.addClientId(parameters, this.config.authOptions.clientId);
-        RequestParameterBuilder_exports.addUsername(parameters, request.username);
-        RequestParameterBuilder_exports.addPassword(parameters, request.password);
-        RequestParameterBuilder_exports.addScopes(parameters, request.scopes, request.correlationId);
+        RequestParameterBuilder_exports.addUsername(parameters, request2.username);
+        RequestParameterBuilder_exports.addPassword(parameters, request2.password);
+        RequestParameterBuilder_exports.addScopes(parameters, request2.scopes, request2.correlationId);
         RequestParameterBuilder_exports.addResponseType(parameters, Constants_exports.OAuthResponseType.IDTOKEN_TOKEN);
         RequestParameterBuilder_exports.addGrantType(parameters, Constants_exports.GrantType.RESOURCE_OWNER_PASSWORD_GRANT);
         RequestParameterBuilder_exports.addClientInfo(parameters);
@@ -12552,21 +12552,21 @@ var init_UsernamePasswordClient = __esm({
         if (this.serverTelemetryManager) {
           RequestParameterBuilder_exports.addServerTelemetry(parameters, this.serverTelemetryManager);
         }
-        const correlationId = request.correlationId || this.config.cryptoInterface.createNewGuid();
+        const correlationId = request2.correlationId || this.config.cryptoInterface.createNewGuid();
         RequestParameterBuilder_exports.addCorrelationId(parameters, correlationId);
         if (this.config.clientCredentials.clientSecret) {
           RequestParameterBuilder_exports.addClientSecret(parameters, this.config.clientCredentials.clientSecret);
         }
         const clientAssertion = this.config.clientCredentials.clientAssertion;
         if (clientAssertion) {
-          RequestParameterBuilder_exports.addClientAssertion(parameters, await getClientAssertion(clientAssertion.assertion, this.config.authOptions.clientId, request.resourceRequestUri));
+          RequestParameterBuilder_exports.addClientAssertion(parameters, await getClientAssertion(clientAssertion.assertion, this.config.authOptions.clientId, request2.resourceRequestUri));
           RequestParameterBuilder_exports.addClientAssertionType(parameters, clientAssertion.assertionType);
         }
-        if (!StringUtils.isEmptyObj(request.claims) || this.config.authOptions.clientCapabilities && this.config.authOptions.clientCapabilities.length > 0) {
-          RequestParameterBuilder_exports.addClaims(parameters, request.correlationId, request.claims, this.config.authOptions.clientCapabilities);
+        if (!StringUtils.isEmptyObj(request2.claims) || this.config.authOptions.clientCapabilities && this.config.authOptions.clientCapabilities.length > 0) {
+          RequestParameterBuilder_exports.addClaims(parameters, request2.correlationId, request2.claims, this.config.authOptions.clientCapabilities);
         }
-        if (this.config.systemOptions.preventCorsPreflight && request.username) {
-          RequestParameterBuilder_exports.addCcsUpn(parameters, request.username);
+        if (this.config.systemOptions.preventCorsPreflight && request2.username) {
+          RequestParameterBuilder_exports.addCcsUpn(parameters, request2.username);
         }
         return UrlUtils_exports.mapToQueryString(parameters);
       }
@@ -12575,12 +12575,12 @@ var init_UsernamePasswordClient = __esm({
 });
 
 // node_modules/@azure/msal-node/dist/protocol/Authorize.mjs
-function getAuthCodeRequestUrl(config2, authority, request, logger) {
+function getAuthCodeRequestUrl(config2, authority, request2, logger) {
   const parameters = Authorize_exports.getStandardAuthorizeRequestParameters({
     ...config2.auth,
     authority,
-    redirectUri: request.redirectUri || ""
-  }, request, logger);
+    redirectUri: request2.redirectUri || ""
+  }, request2, logger);
   RequestParameterBuilder_exports.addLibraryInfo(parameters, {
     sku: Constants.MSAL_SKU,
     version: version2,
@@ -12591,10 +12591,10 @@ function getAuthCodeRequestUrl(config2, authority, request, logger) {
     RequestParameterBuilder_exports.addApplicationTelemetry(parameters, config2.telemetry.application);
   }
   RequestParameterBuilder_exports.addResponseType(parameters, Constants_exports.OAuthResponseType.CODE);
-  if (request.codeChallenge && request.codeChallengeMethod) {
-    RequestParameterBuilder_exports.addCodeChallengeParams(parameters, request.codeChallenge, request.codeChallengeMethod);
+  if (request2.codeChallenge && request2.codeChallengeMethod) {
+    RequestParameterBuilder_exports.addCodeChallengeParams(parameters, request2.codeChallenge, request2.codeChallengeMethod);
   }
-  RequestParameterBuilder_exports.addExtraParameters(parameters, request.extraQueryParameters || {});
+  RequestParameterBuilder_exports.addExtraParameters(parameters, request2.extraQueryParameters || {});
   return Authorize_exports.getAuthorizeUrl(authority, parameters);
 }
 var init_Authorize2 = __esm({
@@ -12642,17 +12642,17 @@ var init_ClientApplication = __esm({
        * sent in the request and should contain an authorization code, which can then be used to acquire tokens via
        * `acquireTokenByCode(AuthorizationCodeRequest)`.
        */
-      async getAuthCodeUrl(request) {
-        this.logger.info("getAuthCodeUrl called", request.correlationId || "");
+      async getAuthCodeUrl(request2) {
+        this.logger.info("getAuthCodeUrl called", request2.correlationId || "");
         const validRequest = {
-          ...request,
-          ...await this.initializeBaseRequest(request),
-          responseMode: request.responseMode || Constants_exports.ResponseMode.QUERY,
+          ...request2,
+          ...await this.initializeBaseRequest(request2),
+          responseMode: request2.responseMode || Constants_exports.ResponseMode.QUERY,
           authenticationScheme: Constants_exports.AuthenticationScheme.BEARER,
-          state: request.state || "",
-          nonce: request.nonce || ""
+          state: request2.state || "",
+          nonce: request2.nonce || ""
         };
-        const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request.azureCloudOptions);
+        const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request2.azureCloudOptions);
         return getAuthCodeRequestUrl(this.config, discoveredAuthority, validRequest, this.logger);
       }
       /**
@@ -12663,21 +12663,21 @@ var init_ClientApplication = __esm({
        * Authorization Code flow. Ensure that values for redirectUri and scopes in AuthorizationCodeUrlRequest and
        * AuthorizationCodeRequest are the same.
        */
-      async acquireTokenByCode(request, authCodePayLoad) {
-        this.logger.info("acquireTokenByCode called", request.correlationId || "");
-        if (request.state && authCodePayLoad) {
-          this.logger.info("acquireTokenByCode - validating state", request.correlationId || "");
-          this.validateState(request.state, authCodePayLoad.state || "", request.correlationId || "");
+      async acquireTokenByCode(request2, authCodePayLoad) {
+        this.logger.info("acquireTokenByCode called", request2.correlationId || "");
+        if (request2.state && authCodePayLoad) {
+          this.logger.info("acquireTokenByCode - validating state", request2.correlationId || "");
+          this.validateState(request2.state, authCodePayLoad.state || "", request2.correlationId || "");
           authCodePayLoad = { ...authCodePayLoad, state: "" };
         }
         const validRequest = {
-          ...request,
-          ...await this.initializeBaseRequest(request),
+          ...request2,
+          ...await this.initializeBaseRequest(request2),
           authenticationScheme: Constants_exports.AuthenticationScheme.BEARER
         };
         const serverTelemetryManager = this.initializeServerTelemetryManager(ApiId.acquireTokenByCode, validRequest.correlationId);
         try {
-          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request.azureCloudOptions);
+          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request2.azureCloudOptions);
           const authClientConfig = await this.buildOauthClientConfiguration(discoveredAuthority, validRequest.correlationId, validRequest.redirectUri, serverTelemetryManager);
           const authorizationCodeClient = new AuthorizationCodeClient(authClientConfig, new StubPerformanceClient());
           this.logger.verbose("Auth code client created", validRequest.correlationId);
@@ -12697,16 +12697,16 @@ var init_ClientApplication = __esm({
        * recommended that you use `acquireTokenSilent()` for silent scenarios. When using `acquireTokenSilent()`, MSAL will
        * handle the caching and refreshing of tokens automatically.
        */
-      async acquireTokenByRefreshToken(request) {
-        this.logger.info("acquireTokenByRefreshToken called", request.correlationId || "");
+      async acquireTokenByRefreshToken(request2) {
+        this.logger.info("acquireTokenByRefreshToken called", request2.correlationId || "");
         const validRequest = {
-          ...request,
-          ...await this.initializeBaseRequest(request),
+          ...request2,
+          ...await this.initializeBaseRequest(request2),
           authenticationScheme: Constants_exports.AuthenticationScheme.BEARER
         };
         const serverTelemetryManager = this.initializeServerTelemetryManager(ApiId.acquireTokenByRefreshToken, validRequest.correlationId);
         try {
-          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request.azureCloudOptions);
+          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request2.azureCloudOptions);
           const refreshTokenClientConfig = await this.buildOauthClientConfiguration(discoveredAuthority, validRequest.correlationId, validRequest.redirectUri || "", serverTelemetryManager);
           const refreshTokenClient = new RefreshTokenClient(refreshTokenClientConfig, new StubPerformanceClient());
           this.logger.verbose("Refresh token client created", validRequest.correlationId);
@@ -12727,15 +12727,15 @@ var init_ClientApplication = __esm({
        * In case the refresh_token is expired or not found, an error is thrown
        * and the guidance is for the user to call any interactive token acquisition API (eg: `acquireTokenByCode()`).
        */
-      async acquireTokenSilent(request) {
+      async acquireTokenSilent(request2) {
         const validRequest = {
-          ...request,
-          ...await this.initializeBaseRequest(request),
-          forceRefresh: request.forceRefresh || false
+          ...request2,
+          ...await this.initializeBaseRequest(request2),
+          forceRefresh: request2.forceRefresh || false
         };
         const serverTelemetryManager = this.initializeServerTelemetryManager(ApiId.acquireTokenSilent, validRequest.correlationId, validRequest.forceRefresh);
         try {
-          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request.azureCloudOptions);
+          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request2.azureCloudOptions);
           const clientConfiguration = await this.buildOauthClientConfiguration(discoveredAuthority, validRequest.correlationId, validRequest.redirectUri || "", serverTelemetryManager);
           const silentFlowClient = new SilentFlowClient(clientConfiguration, new StubPerformanceClient());
           this.logger.verbose("Silent flow client created", validRequest.correlationId);
@@ -12783,15 +12783,15 @@ var init_ClientApplication = __esm({
        * @param request - UsenamePasswordRequest
        * @deprecated - Use a more secure flow instead
        */
-      async acquireTokenByUsernamePassword(request) {
-        this.logger.info("acquireTokenByUsernamePassword called", request.correlationId || "");
+      async acquireTokenByUsernamePassword(request2) {
+        this.logger.info("acquireTokenByUsernamePassword called", request2.correlationId || "");
         const validRequest = {
-          ...request,
-          ...await this.initializeBaseRequest(request)
+          ...request2,
+          ...await this.initializeBaseRequest(request2)
         };
         const serverTelemetryManager = this.initializeServerTelemetryManager(ApiId.acquireTokenByUsernamePassword, validRequest.correlationId);
         try {
-          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request.azureCloudOptions);
+          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request2.azureCloudOptions);
           const usernamePasswordClientConfig = await this.buildOauthClientConfiguration(discoveredAuthority, validRequest.correlationId, "", serverTelemetryManager);
           const usernamePasswordClient = new UsernamePasswordClient(usernamePasswordClientConfig);
           this.logger.verbose("Username password client created", validRequest.correlationId);
@@ -13125,45 +13125,45 @@ var init_DeviceCodeClient = __esm({
        * polls token endpoint to exchange device code for tokens
        * @param request - developer provided CommonDeviceCodeRequest
        */
-      async acquireToken(request) {
-        const deviceCodeResponse = await this.getDeviceCode(request);
-        request.deviceCodeCallback(deviceCodeResponse);
+      async acquireToken(request2) {
+        const deviceCodeResponse = await this.getDeviceCode(request2);
+        request2.deviceCodeCallback(deviceCodeResponse);
         const reqTimestamp = TimeUtils_exports.nowSeconds();
-        const response = await this.acquireTokenWithDeviceCode(request, deviceCodeResponse);
+        const response = await this.acquireTokenWithDeviceCode(request2, deviceCodeResponse);
         const responseHandler = new ResponseHandler(this.config.authOptions.clientId, this.cacheManager, this.cryptoUtils, this.logger, this.performanceClient, this.config.serializableCache, this.config.persistencePlugin);
-        responseHandler.validateTokenResponse(response, request.correlationId);
-        return responseHandler.handleServerTokenResponse(response, this.authority, reqTimestamp, request, ApiId.acquireTokenByDeviceCode);
+        responseHandler.validateTokenResponse(response, request2.correlationId);
+        return responseHandler.handleServerTokenResponse(response, this.authority, reqTimestamp, request2, ApiId.acquireTokenByDeviceCode);
       }
       /**
        * Creates device code request and executes http GET
        * @param request - developer provided CommonDeviceCodeRequest
        */
-      async getDeviceCode(request) {
-        const queryParametersString = this.createExtraQueryParameters(request);
-        const endpoint = UrlString.appendQueryString(this.authority.deviceCodeEndpoint, queryParametersString);
-        const queryString = this.createQueryString(request);
+      async getDeviceCode(request2) {
+        const queryParametersString = this.createExtraQueryParameters(request2);
+        const endpoint2 = UrlString.appendQueryString(this.authority.deviceCodeEndpoint, queryParametersString);
+        const queryString = this.createQueryString(request2);
         const headers = this.createTokenRequestHeaders();
         const thumbprint = {
           clientId: this.config.authOptions.clientId,
-          authority: request.authority,
-          scopes: request.scopes,
-          claims: request.claims,
-          authenticationScheme: request.authenticationScheme,
-          resourceRequestMethod: request.resourceRequestMethod,
-          resourceRequestUri: request.resourceRequestUri,
-          shrClaims: request.shrClaims,
-          sshKid: request.sshKid
+          authority: request2.authority,
+          scopes: request2.scopes,
+          claims: request2.claims,
+          authenticationScheme: request2.authenticationScheme,
+          resourceRequestMethod: request2.resourceRequestMethod,
+          resourceRequestUri: request2.resourceRequestUri,
+          shrClaims: request2.shrClaims,
+          sshKid: request2.sshKid
         };
-        return this.executePostRequestToDeviceCodeEndpoint(endpoint, queryString, headers, thumbprint, request.correlationId);
+        return this.executePostRequestToDeviceCodeEndpoint(endpoint2, queryString, headers, thumbprint, request2.correlationId);
       }
       /**
        * Creates query string for the device code request
        * @param request - developer provided CommonDeviceCodeRequest
        */
-      createExtraQueryParameters(request) {
+      createExtraQueryParameters(request2) {
         const parameters = /* @__PURE__ */ new Map();
-        if (request.extraQueryParameters) {
-          RequestParameterBuilder_exports.addExtraParameters(parameters, request.extraQueryParameters);
+        if (request2.extraQueryParameters) {
+          RequestParameterBuilder_exports.addExtraParameters(parameters, request2.extraQueryParameters);
         }
         return UrlUtils_exports.mapToQueryString(parameters);
       }
@@ -13193,15 +13193,15 @@ var init_DeviceCodeClient = __esm({
        * Create device code endpoint query parameters and returns string
        * @param request - developer provided CommonDeviceCodeRequest
        */
-      createQueryString(request) {
+      createQueryString(request2) {
         const parameters = /* @__PURE__ */ new Map();
-        RequestParameterBuilder_exports.addScopes(parameters, request.scopes, request.correlationId);
+        RequestParameterBuilder_exports.addScopes(parameters, request2.scopes, request2.correlationId);
         RequestParameterBuilder_exports.addClientId(parameters, this.config.authOptions.clientId);
-        if (request.extraQueryParameters) {
-          RequestParameterBuilder_exports.addExtraParameters(parameters, request.extraQueryParameters);
+        if (request2.extraQueryParameters) {
+          RequestParameterBuilder_exports.addExtraParameters(parameters, request2.extraQueryParameters);
         }
-        if (request.claims || this.config.authOptions.clientCapabilities && this.config.authOptions.clientCapabilities.length > 0) {
-          RequestParameterBuilder_exports.addClaims(parameters, request.correlationId, request.claims, this.config.authOptions.clientCapabilities);
+        if (request2.claims || this.config.authOptions.clientCapabilities && this.config.authOptions.clientCapabilities.length > 0) {
+          RequestParameterBuilder_exports.addClaims(parameters, request2.correlationId, request2.claims, this.config.authOptions.clientCapabilities);
         }
         return UrlUtils_exports.mapToQueryString(parameters);
       }
@@ -13233,55 +13233,55 @@ var init_DeviceCodeClient = __esm({
        * @param request - developer provided CommonDeviceCodeRequest
        * @param deviceCodeResponse - DeviceCodeResponse returned by the security token service device code endpoint
        */
-      async acquireTokenWithDeviceCode(request, deviceCodeResponse) {
-        const queryParametersString = this.createTokenQueryParameters(request);
-        const endpoint = UrlString.appendQueryString(this.authority.tokenEndpoint, queryParametersString);
-        const requestBody = this.createTokenRequestBody(request, deviceCodeResponse);
+      async acquireTokenWithDeviceCode(request2, deviceCodeResponse) {
+        const queryParametersString = this.createTokenQueryParameters(request2);
+        const endpoint2 = UrlString.appendQueryString(this.authority.tokenEndpoint, queryParametersString);
+        const requestBody = this.createTokenRequestBody(request2, deviceCodeResponse);
         const headers = this.createTokenRequestHeaders();
-        const userSpecifiedTimeout = request.timeout ? TimeUtils_exports.nowSeconds() + request.timeout : void 0;
+        const userSpecifiedTimeout = request2.timeout ? TimeUtils_exports.nowSeconds() + request2.timeout : void 0;
         const deviceCodeExpirationTime = TimeUtils_exports.nowSeconds() + deviceCodeResponse.expiresIn;
         const pollingIntervalMilli = deviceCodeResponse.interval * 1e3;
-        while (this.continuePolling(deviceCodeExpirationTime, request.correlationId, userSpecifiedTimeout, request.cancel)) {
+        while (this.continuePolling(deviceCodeExpirationTime, request2.correlationId, userSpecifiedTimeout, request2.cancel)) {
           const thumbprint = {
             clientId: this.config.authOptions.clientId,
-            authority: request.authority,
-            scopes: request.scopes,
-            claims: request.claims,
-            authenticationScheme: request.authenticationScheme,
-            resourceRequestMethod: request.resourceRequestMethod,
-            resourceRequestUri: request.resourceRequestUri,
-            shrClaims: request.shrClaims,
-            sshKid: request.sshKid
+            authority: request2.authority,
+            scopes: request2.scopes,
+            claims: request2.claims,
+            authenticationScheme: request2.authenticationScheme,
+            resourceRequestMethod: request2.resourceRequestMethod,
+            resourceRequestUri: request2.resourceRequestUri,
+            shrClaims: request2.shrClaims,
+            sshKid: request2.sshKid
           };
-          const response = await this.executePostToTokenEndpoint(endpoint, requestBody, headers, thumbprint, request.correlationId);
+          const response = await this.executePostToTokenEndpoint(endpoint2, requestBody, headers, thumbprint, request2.correlationId);
           if (response.body && response.body.error) {
             if (response.body.error === Constants_exports.AUTHORIZATION_PENDING) {
-              this.logger.info("Authorization pending. Continue polling.", request.correlationId);
+              this.logger.info("Authorization pending. Continue polling.", request2.correlationId);
               await TimeUtils_exports.delay(pollingIntervalMilli);
             } else {
-              this.logger.info("Unexpected error in polling from the server", request.correlationId);
-              throw createAuthError(AuthErrorCodes_exports.postRequestFailed, request.correlationId, response.body.error);
+              this.logger.info("Unexpected error in polling from the server", request2.correlationId);
+              throw createAuthError(AuthErrorCodes_exports.postRequestFailed, request2.correlationId, response.body.error);
             }
           } else {
-            this.logger.verbose("Authorization completed successfully. Polling stopped.", request.correlationId);
+            this.logger.verbose("Authorization completed successfully. Polling stopped.", request2.correlationId);
             return response.body;
           }
         }
-        this.logger.error("Polling stopped for unknown reasons.", request.correlationId);
-        throw createClientAuthError(deviceCodeUnknownError, request.correlationId);
+        this.logger.error("Polling stopped for unknown reasons.", request2.correlationId);
+        throw createClientAuthError(deviceCodeUnknownError, request2.correlationId);
       }
       /**
        * Creates query parameters and converts to string.
        * @param request - developer provided CommonDeviceCodeRequest
        * @param deviceCodeResponse - DeviceCodeResponse returned by the security token service device code endpoint
        */
-      createTokenRequestBody(request, deviceCodeResponse) {
+      createTokenRequestBody(request2, deviceCodeResponse) {
         const parameters = /* @__PURE__ */ new Map();
-        RequestParameterBuilder_exports.addScopes(parameters, request.scopes, request.correlationId);
+        RequestParameterBuilder_exports.addScopes(parameters, request2.scopes, request2.correlationId);
         RequestParameterBuilder_exports.addClientId(parameters, this.config.authOptions.clientId);
         RequestParameterBuilder_exports.addGrantType(parameters, Constants_exports.GrantType.DEVICE_CODE_GRANT);
         RequestParameterBuilder_exports.addDeviceCode(parameters, deviceCodeResponse.deviceCode);
-        const correlationId = request.correlationId || this.config.cryptoInterface.createNewGuid();
+        const correlationId = request2.correlationId || this.config.cryptoInterface.createNewGuid();
         RequestParameterBuilder_exports.addCorrelationId(parameters, correlationId);
         RequestParameterBuilder_exports.addClientInfo(parameters);
         RequestParameterBuilder_exports.addLibraryInfo(parameters, this.config.libraryInfo);
@@ -13290,8 +13290,8 @@ var init_DeviceCodeClient = __esm({
         if (this.serverTelemetryManager) {
           RequestParameterBuilder_exports.addServerTelemetry(parameters, this.serverTelemetryManager);
         }
-        if (!StringUtils.isEmptyObj(request.claims) || this.config.authOptions.clientCapabilities && this.config.authOptions.clientCapabilities.length > 0) {
-          RequestParameterBuilder_exports.addClaims(parameters, request.correlationId, request.claims, this.config.authOptions.clientCapabilities);
+        if (!StringUtils.isEmptyObj(request2.claims) || this.config.authOptions.clientCapabilities && this.config.authOptions.clientCapabilities.length > 0) {
+          RequestParameterBuilder_exports.addClaims(parameters, request2.correlationId, request2.claims, this.config.authOptions.clientCapabilities);
         }
         return UrlUtils_exports.mapToQueryString(parameters);
       }
@@ -13353,13 +13353,13 @@ var init_PublicClientApplication = __esm({
        * Since the client cannot receive incoming requests, it polls the authorization server repeatedly
        * until the end-user completes input of credentials.
        */
-      async acquireTokenByDeviceCode(request) {
-        this.logger.info("acquireTokenByDeviceCode called", request.correlationId || "");
-        enforceResourceParameter(this.config.auth.isMcp, request);
-        const validRequest = Object.assign(request, await this.initializeBaseRequest(request));
+      async acquireTokenByDeviceCode(request2) {
+        this.logger.info("acquireTokenByDeviceCode called", request2.correlationId || "");
+        enforceResourceParameter(this.config.auth.isMcp, request2);
+        const validRequest = Object.assign(request2, await this.initializeBaseRequest(request2));
         const serverTelemetryManager = this.initializeServerTelemetryManager(ApiId.acquireTokenByDeviceCode, validRequest.correlationId);
         try {
-          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request.azureCloudOptions);
+          const discoveredAuthority = await this.createAuthority(validRequest.authority, validRequest.correlationId, void 0, request2.azureCloudOptions);
           const deviceCodeConfig = await this.buildOauthClientConfiguration(discoveredAuthority, validRequest.correlationId, "", serverTelemetryManager);
           const deviceCodeClient = new DeviceCodeClient(deviceCodeConfig);
           this.logger.verbose("Device code client created", validRequest.correlationId);
@@ -13375,11 +13375,11 @@ var init_PublicClientApplication = __esm({
       /**
        * Acquires a token interactively via the browser by requesting an authorization code then exchanging it for a token.
        */
-      async acquireTokenInteractive(request) {
-        const correlationId = request.correlationId || this.cryptoProvider.createNewGuid();
+      async acquireTokenInteractive(request2) {
+        const correlationId = request2.correlationId || this.cryptoProvider.createNewGuid();
         this.logger.trace("acquireTokenInteractive called", correlationId);
-        enforceResourceParameter(this.config.auth.isMcp, request);
-        const { openBrowser, successTemplate, errorTemplate, windowHandle, loopbackClient: customLoopbackClient, preferredPort, ...remainingProperties } = request;
+        enforceResourceParameter(this.config.auth.isMcp, request2);
+        const { openBrowser, successTemplate, errorTemplate, windowHandle, loopbackClient: customLoopbackClient, preferredPort, ...remainingProperties } = request2;
         if (customLoopbackClient) {
           this.logger.warning("The loopbackClient option is deprecated and will be removed in a future major version. Omit it to use the built-in loopback server, and set preferredPort when a fixed port is required.", correlationId);
         }
@@ -13387,9 +13387,9 @@ var init_PublicClientApplication = __esm({
           const brokerRequest = {
             ...remainingProperties,
             clientId: this.config.auth.clientId,
-            scopes: request.scopes || Constants_exports.OIDC_DEFAULT_SCOPES,
-            redirectUri: request.redirectUri || "",
-            authority: request.authority || this.config.auth.authority,
+            scopes: request2.scopes || Constants_exports.OIDC_DEFAULT_SCOPES,
+            redirectUri: request2.redirectUri || "",
+            authority: request2.authority || this.config.auth.authority,
             correlationId,
             extraParameters: {
               ...remainingProperties.extraQueryParameters,
@@ -13400,11 +13400,11 @@ var init_PublicClientApplication = __esm({
           };
           return this.nativeBrokerPlugin.acquireTokenInteractive(brokerRequest, windowHandle);
         }
-        if (request.redirectUri) {
+        if (request2.redirectUri) {
           if (!this.config.broker.nativeBrokerPlugin) {
             throw NodeAuthError.createRedirectUriNotSupportedError(correlationId);
           }
-          request.redirectUri = "";
+          request2.redirectUri = "";
         }
         const { verifier, challenge } = await this.cryptoProvider.generatePkceCodes();
         const loopbackClient = customLoopbackClient || new LoopbackClient(preferredPort);
@@ -13424,7 +13424,7 @@ var init_PublicClientApplication = __esm({
           const validRequest = {
             ...remainingProperties,
             correlationId,
-            scopes: request.scopes || Constants_exports.OIDC_DEFAULT_SCOPES,
+            scopes: request2.scopes || Constants_exports.OIDC_DEFAULT_SCOPES,
             redirectUri,
             responseMode,
             codeChallenge: challenge,
@@ -13458,67 +13458,67 @@ var init_PublicClientApplication = __esm({
        * @param request - developer provided SilentFlowRequest
        * @returns
        */
-      async acquireTokenSilent(request) {
-        const correlationId = request.correlationId || this.cryptoProvider.createNewGuid();
+      async acquireTokenSilent(request2) {
+        const correlationId = request2.correlationId || this.cryptoProvider.createNewGuid();
         this.logger.trace("acquireTokenSilent called", correlationId);
-        enforceResourceParameter(this.config.auth.isMcp, request);
+        enforceResourceParameter(this.config.auth.isMcp, request2);
         if (this.nativeBrokerPlugin) {
           const brokerRequest = {
-            ...request,
+            ...request2,
             clientId: this.config.auth.clientId,
-            scopes: request.scopes || Constants_exports.OIDC_DEFAULT_SCOPES,
-            redirectUri: request.redirectUri || "",
-            authority: request.authority || this.config.auth.authority,
+            scopes: request2.scopes || Constants_exports.OIDC_DEFAULT_SCOPES,
+            redirectUri: request2.redirectUri || "",
+            authority: request2.authority || this.config.auth.authority,
             correlationId,
             extraParameters: {
-              ...request.extraQueryParameters,
-              ...request.extraParameters,
+              ...request2.extraQueryParameters,
+              ...request2.extraParameters,
               [AADServerParamKeys_exports.X_CLIENT_EXTRA_SKU]: this.skus
             },
-            accountId: request.account.nativeAccountId,
-            forceRefresh: request.forceRefresh || false
+            accountId: request2.account.nativeAccountId,
+            forceRefresh: request2.forceRefresh || false
           };
           return this.nativeBrokerPlugin.acquireTokenSilent(brokerRequest);
         }
-        if (request.redirectUri) {
+        if (request2.redirectUri) {
           if (!this.config.broker.nativeBrokerPlugin) {
             throw NodeAuthError.createRedirectUriNotSupportedError(correlationId);
           }
-          request.redirectUri = "";
+          request2.redirectUri = "";
         }
-        return super.acquireTokenSilent(request);
+        return super.acquireTokenSilent(request2);
       }
       /**
        * Acquires a token by exchanging the authorization code received from the first step of OAuth 2.0 Authorization Code Flow.
        * In MCP mode, a resource parameter is required on the request.
        */
-      async acquireTokenByCode(request, authCodePayLoad) {
-        enforceResourceParameter(this.config.auth.isMcp, request);
-        return super.acquireTokenByCode(request, authCodePayLoad);
+      async acquireTokenByCode(request2, authCodePayLoad) {
+        enforceResourceParameter(this.config.auth.isMcp, request2);
+        return super.acquireTokenByCode(request2, authCodePayLoad);
       }
       /**
        * Acquires a token by exchanging the refresh token provided for a new set of tokens.
        * In MCP mode, a resource parameter is required on the request.
        */
-      async acquireTokenByRefreshToken(request) {
-        enforceResourceParameter(this.config.auth.isMcp, request);
-        return super.acquireTokenByRefreshToken(request);
+      async acquireTokenByRefreshToken(request2) {
+        enforceResourceParameter(this.config.auth.isMcp, request2);
+        return super.acquireTokenByRefreshToken(request2);
       }
       /**
        * Removes cache artifacts associated with the given account
        * @param request - developer provided SignOutRequest
        * @returns
        */
-      async signOut(request) {
-        if (this.nativeBrokerPlugin && request.account.nativeAccountId) {
+      async signOut(request2) {
+        if (this.nativeBrokerPlugin && request2.account.nativeAccountId) {
           const signoutRequest = {
             clientId: this.config.auth.clientId,
-            accountId: request.account.nativeAccountId,
-            correlationId: request.correlationId || this.cryptoProvider.createNewGuid()
+            accountId: request2.account.nativeAccountId,
+            correlationId: request2.correlationId || this.cryptoProvider.createNewGuid()
           };
           await this.nativeBrokerPlugin.signOut(signoutRequest);
         }
-        await this.getTokenCache().removeAccount(request.account, request.correlationId);
+        await this.getTokenCache().removeAccount(request2.account, request2.correlationId);
       }
       /**
        * Returns all cached accounts for this application. If brokering is enabled this request will be serviced by the broker.
@@ -66083,8 +66083,8 @@ var Protocol = class {
     this._taskStore = _options?.taskStore;
     this._taskMessageQueue = _options?.taskMessageQueue;
     if (this._taskStore) {
-      this.setRequestHandler(GetTaskRequestSchema, async (request, extra) => {
-        const task = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
+      this.setRequestHandler(GetTaskRequestSchema, async (request2, extra) => {
+        const task = await this._taskStore.getTask(request2.params.taskId, extra.sessionId);
         if (!task) {
           throw new McpError(ErrorCode.InvalidParams, "Failed to retrieve task: Task not found");
         }
@@ -66092,9 +66092,9 @@ var Protocol = class {
           ...task
         };
       });
-      this.setRequestHandler(GetTaskPayloadRequestSchema, async (request, extra) => {
+      this.setRequestHandler(GetTaskPayloadRequestSchema, async (request2, extra) => {
         const handleTaskResult = async () => {
-          const taskId = request.params.taskId;
+          const taskId = request2.params.taskId;
           if (this._taskMessageQueue) {
             let queuedMessage;
             while (queuedMessage = await this._taskMessageQueue.dequeue(taskId, extra.sessionId)) {
@@ -66145,9 +66145,9 @@ var Protocol = class {
         };
         return await handleTaskResult();
       });
-      this.setRequestHandler(ListTasksRequestSchema, async (request, extra) => {
+      this.setRequestHandler(ListTasksRequestSchema, async (request2, extra) => {
         try {
-          const { tasks, nextCursor } = await this._taskStore.listTasks(request.params?.cursor, extra.sessionId);
+          const { tasks, nextCursor } = await this._taskStore.listTasks(request2.params?.cursor, extra.sessionId);
           return {
             tasks,
             nextCursor,
@@ -66157,20 +66157,20 @@ var Protocol = class {
           throw new McpError(ErrorCode.InvalidParams, `Failed to list tasks: ${error2 instanceof Error ? error2.message : String(error2)}`);
         }
       });
-      this.setRequestHandler(CancelTaskRequestSchema, async (request, extra) => {
+      this.setRequestHandler(CancelTaskRequestSchema, async (request2, extra) => {
         try {
-          const task = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
+          const task = await this._taskStore.getTask(request2.params.taskId, extra.sessionId);
           if (!task) {
-            throw new McpError(ErrorCode.InvalidParams, `Task not found: ${request.params.taskId}`);
+            throw new McpError(ErrorCode.InvalidParams, `Task not found: ${request2.params.taskId}`);
           }
           if (isTerminal2(task.status)) {
             throw new McpError(ErrorCode.InvalidParams, `Cannot cancel task in terminal status: ${task.status}`);
           }
-          await this._taskStore.updateTaskStatus(request.params.taskId, "cancelled", "Client cancelled task execution.", extra.sessionId);
-          this._clearTaskQueue(request.params.taskId);
-          const cancelledTask = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
+          await this._taskStore.updateTaskStatus(request2.params.taskId, "cancelled", "Client cancelled task execution.", extra.sessionId);
+          this._clearTaskQueue(request2.params.taskId);
+          const cancelledTask = await this._taskStore.getTask(request2.params.taskId, extra.sessionId);
           if (!cancelledTask) {
-            throw new McpError(ErrorCode.InvalidParams, `Task not found after cancellation: ${request.params.taskId}`);
+            throw new McpError(ErrorCode.InvalidParams, `Task not found after cancellation: ${request2.params.taskId}`);
           }
           return {
             _meta: {},
@@ -66291,14 +66291,14 @@ var Protocol = class {
     }
     Promise.resolve().then(() => handler(notification)).catch((error2) => this._onerror(new Error(`Uncaught error in notification handler: ${error2}`)));
   }
-  _onrequest(request, extra) {
-    const handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
+  _onrequest(request2, extra) {
+    const handler = this._requestHandlers.get(request2.method) ?? this.fallbackRequestHandler;
     const capturedTransport = this._transport;
-    const relatedTaskId = request.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
+    const relatedTaskId = request2.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
     if (handler === void 0) {
       const errorResponse = {
         jsonrpc: "2.0",
-        id: request.id,
+        id: request2.id,
         error: {
           code: ErrorCode.MethodNotFound,
           message: "Method not found"
@@ -66316,17 +66316,17 @@ var Protocol = class {
       return;
     }
     const abortController = new AbortController();
-    this._requestHandlerAbortControllers.set(request.id, abortController);
-    const taskCreationParams = isTaskAugmentedRequestParams(request.params) ? request.params.task : void 0;
-    const taskStore = this._taskStore ? this.requestTaskStore(request, capturedTransport?.sessionId) : void 0;
+    this._requestHandlerAbortControllers.set(request2.id, abortController);
+    const taskCreationParams = isTaskAugmentedRequestParams(request2.params) ? request2.params.task : void 0;
+    const taskStore = this._taskStore ? this.requestTaskStore(request2, capturedTransport?.sessionId) : void 0;
     const fullExtra = {
       signal: abortController.signal,
       sessionId: capturedTransport?.sessionId,
-      _meta: request.params?._meta,
+      _meta: request2.params?._meta,
       sendNotification: async (notification) => {
         if (abortController.signal.aborted)
           return;
-        const notificationOptions = { relatedRequestId: request.id };
+        const notificationOptions = { relatedRequestId: request2.id };
         if (relatedTaskId) {
           notificationOptions.relatedTask = { taskId: relatedTaskId };
         }
@@ -66336,7 +66336,7 @@ var Protocol = class {
         if (abortController.signal.aborted) {
           throw new McpError(ErrorCode.ConnectionClosed, "Request was cancelled");
         }
-        const requestOptions = { ...options, relatedRequestId: request.id };
+        const requestOptions = { ...options, relatedRequestId: request2.id };
         if (relatedTaskId && !requestOptions.relatedTask) {
           requestOptions.relatedTask = { taskId: relatedTaskId };
         }
@@ -66347,7 +66347,7 @@ var Protocol = class {
         return await this.request(r, resultSchema, requestOptions);
       },
       authInfo: extra?.authInfo,
-      requestId: request.id,
+      requestId: request2.id,
       requestInfo: extra?.requestInfo,
       taskId: relatedTaskId,
       taskStore,
@@ -66357,16 +66357,16 @@ var Protocol = class {
     };
     Promise.resolve().then(() => {
       if (taskCreationParams) {
-        this.assertTaskHandlerCapability(request.method);
+        this.assertTaskHandlerCapability(request2.method);
       }
-    }).then(() => handler(request, fullExtra)).then(async (result) => {
+    }).then(() => handler(request2, fullExtra)).then(async (result) => {
       if (abortController.signal.aborted) {
         return;
       }
       const response = {
         result,
         jsonrpc: "2.0",
-        id: request.id
+        id: request2.id
       };
       if (relatedTaskId && this._taskMessageQueue) {
         await this._enqueueTaskMessage(relatedTaskId, {
@@ -66383,7 +66383,7 @@ var Protocol = class {
       }
       const errorResponse = {
         jsonrpc: "2.0",
-        id: request.id,
+        id: request2.id,
         error: {
           code: Number.isSafeInteger(error2["code"]) ? error2["code"] : ErrorCode.InternalError,
           message: error2.message ?? "Internal error",
@@ -66400,8 +66400,8 @@ var Protocol = class {
         await capturedTransport?.send(errorResponse);
       }
     }).catch((error2) => this._onerror(new Error(`Failed to send response: ${error2}`))).finally(() => {
-      if (this._requestHandlerAbortControllers.get(request.id) === abortController) {
-        this._requestHandlerAbortControllers.delete(request.id);
+      if (this._requestHandlerAbortControllers.get(request2.id) === abortController) {
+        this._requestHandlerAbortControllers.delete(request2.id);
       }
     });
   }
@@ -66505,11 +66505,11 @@ var Protocol = class {
    *
    * @experimental Use `client.experimental.tasks.requestStream()` to access this method.
    */
-  async *requestStream(request, resultSchema, options) {
+  async *requestStream(request2, resultSchema, options) {
     const { task } = options ?? {};
     if (!task) {
       try {
-        const result = await this.request(request, resultSchema, options);
+        const result = await this.request(request2, resultSchema, options);
         yield { type: "result", result };
       } catch (error2) {
         yield {
@@ -66521,7 +66521,7 @@ var Protocol = class {
     }
     let taskId;
     try {
-      const createResult = await this.request(request, CreateTaskResultSchema, options);
+      const createResult = await this.request(request2, CreateTaskResultSchema, options);
       if (createResult.task) {
         taskId = createResult.task.taskId;
         yield { type: "taskCreated", task: createResult.task };
@@ -66569,7 +66569,7 @@ var Protocol = class {
    *
    * Do not use this method to emit notifications! Use notification() instead.
    */
-  request(request, resultSchema, options) {
+  request(request2, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
     return new Promise((resolve2, reject) => {
       const earlyReject = (error2) => {
@@ -66581,9 +66581,9 @@ var Protocol = class {
       }
       if (this._options?.enforceStrictCapabilities === true) {
         try {
-          this.assertCapabilityForMethod(request.method);
+          this.assertCapabilityForMethod(request2.method);
           if (task) {
-            this.assertTaskCapability(request.method);
+            this.assertTaskCapability(request2.method);
           }
         } catch (e) {
           earlyReject(e);
@@ -66593,16 +66593,16 @@ var Protocol = class {
       options?.signal?.throwIfAborted();
       const messageId = this._requestMessageId++;
       const jsonrpcRequest = {
-        ...request,
+        ...request2,
         jsonrpc: "2.0",
         id: messageId
       };
       if (options?.onprogress) {
         this._progressHandlers.set(messageId, options.onprogress);
         jsonrpcRequest.params = {
-          ...request.params,
+          ...request2.params,
           _meta: {
-            ...request.params?._meta || {},
+            ...request2.params?._meta || {},
             progressToken: messageId
           }
         };
@@ -66806,8 +66806,8 @@ var Protocol = class {
   setRequestHandler(requestSchema, handler) {
     const method = getMethodLiteral(requestSchema);
     this.assertRequestHandlerCapability(method);
-    this._requestHandlers.set(method, (request, extra) => {
-      const parsed = parseWithCompat(requestSchema, request);
+    this._requestHandlers.set(method, (request2, extra) => {
+      const parsed = parseWithCompat(requestSchema, request2);
       return Promise.resolve(handler(parsed, extra));
     });
   }
@@ -66922,19 +66922,19 @@ var Protocol = class {
       }, { once: true });
     });
   }
-  requestTaskStore(request, sessionId) {
+  requestTaskStore(request2, sessionId) {
     const taskStore = this._taskStore;
     if (!taskStore) {
       throw new Error("No task store configured");
     }
     return {
       createTask: async (taskParams) => {
-        if (!request) {
+        if (!request2) {
           throw new Error("No request provided");
         }
-        return await taskStore.createTask(taskParams, request.id, {
-          method: request.method,
-          params: request.params
+        return await taskStore.createTask(taskParams, request2.id, {
+          method: request2.method,
+          params: request2.params
         }, sessionId);
       },
       getTask: async (taskId) => {
@@ -67225,8 +67225,8 @@ var ExperimentalClientTasks = class {
    *
    * @experimental
    */
-  requestStream(request, resultSchema, options) {
-    return this._client.requestStream(request, resultSchema, options);
+  requestStream(request2, resultSchema, options) {
+    return this._client.requestStream(request2, resultSchema, options);
   }
 };
 
@@ -67391,8 +67391,8 @@ var Client = class extends Protocol {
     }
     const method = methodValue;
     if (method === "elicitation/create") {
-      const wrappedHandler = async (request, extra) => {
-        const validatedRequest = safeParse2(ElicitRequestSchema, request);
+      const wrappedHandler = async (request2, extra) => {
+        const validatedRequest = safeParse2(ElicitRequestSchema, request2);
         if (!validatedRequest.success) {
           const errorMessage = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
           throw new McpError(ErrorCode.InvalidParams, `Invalid elicitation request: ${errorMessage}`);
@@ -67406,7 +67406,7 @@ var Client = class extends Protocol {
         if (params.mode === "url" && !supportsUrlMode) {
           throw new McpError(ErrorCode.InvalidParams, "Client does not support URL-mode elicitation requests");
         }
-        const result = await Promise.resolve(handler(request, extra));
+        const result = await Promise.resolve(handler(request2, extra));
         if (params.task) {
           const taskValidationResult = safeParse2(CreateTaskResultSchema, result);
           if (!taskValidationResult.success) {
@@ -67435,14 +67435,14 @@ var Client = class extends Protocol {
       return super.setRequestHandler(requestSchema, wrappedHandler);
     }
     if (method === "sampling/createMessage") {
-      const wrappedHandler = async (request, extra) => {
-        const validatedRequest = safeParse2(CreateMessageRequestSchema, request);
+      const wrappedHandler = async (request2, extra) => {
+        const validatedRequest = safeParse2(CreateMessageRequestSchema, request2);
         if (!validatedRequest.success) {
           const errorMessage = validatedRequest.error instanceof Error ? validatedRequest.error.message : String(validatedRequest.error);
           throw new McpError(ErrorCode.InvalidParams, `Invalid sampling request: ${errorMessage}`);
         }
         const { params } = validatedRequest.data;
-        const result = await Promise.resolve(handler(request, extra));
+        const result = await Promise.resolve(handler(request2, extra));
         if (params.task) {
           const taskValidationResult = safeParse2(CreateTaskResultSchema, result);
           if (!taskValidationResult.success) {
@@ -71021,6 +71021,7 @@ __export(icm_exports, {
   ackMany: () => ackMany,
   ackManyAsOwner: () => ackManyAsOwner,
   addComment: () => addComment,
+  addEnrichment: () => addEnrichment,
   addKeyword: () => addKeyword,
   addTag: () => addTag,
   aggregateOncallByWeek: () => aggregateOncallByWeek,
@@ -71050,6 +71051,7 @@ __export(icm_exports, {
   excludeHandledClause: () => excludeHandledClause,
   expandDateToken: () => expandDateToken,
   fetchSavedQueryProperties: () => fetchSavedQueryProperties,
+  getEnrichments: () => getEnrichments,
   getIncident: () => getIncident,
   handledMarkOf: () => handledMarkOf,
   historicalOwners: () => historicalOwners,
@@ -71099,6 +71101,59 @@ __export(icm_exports, {
   update: () => update,
   writeFieldsCacheForTest: () => writeFieldsCacheForTest
 });
+
+// src/icm-enrichment.ts
+init_auth();
+init_http();
+function endpoint(id) {
+  if (!/^[1-9]\d*$/.test(String(id)) || !Number.isSafeInteger(Number(id))) throw new Error("Invalid incident ID.");
+  return `https://prod.microsofticm.com/api2/user/incidentapi/incidents/${id}/enrichments`;
+}
+async function request(method, url2, timeout, body) {
+  const token = await icmToken();
+  const response = await fetchWithTimeout(url2, {
+    method,
+    timeoutSeconds: timeout,
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    ...body === void 0 ? {} : { body: JSON.stringify(body) }
+  });
+  if (!response.ok) throw new Error(`IcM enrichment ${method} returned HTTP ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  return response.json();
+}
+function addEnrichment(id, html, dataSourceName, timeout = 60) {
+  const url2 = endpoint(id);
+  if (!html.trim() || !dataSourceName.trim() || dataSourceName.length >= 1024) throw new Error("Enrichment HTML and source name are required.");
+  return request("POST", `${url2}?api-version=1.0`, timeout, {
+    IncidentId: Number(id),
+    DataSourceName: dataSourceName,
+    SubmittedBy: dataSourceName,
+    DataSourceType: "Unknown",
+    EnrichmentContent: { HtmlData: html }
+  });
+}
+async function getEnrichments(id, timeout = 60) {
+  const url2 = endpoint(id);
+  const entries = [];
+  const ids = /* @__PURE__ */ new Set();
+  const tokens = /* @__PURE__ */ new Set();
+  let token = "";
+  do {
+    const query = new URLSearchParams({ "api-version": "1.0", pageSize: "100", ...token ? { continuousToken: token } : {} });
+    const page = await request("GET", `${url2}?${query}`, timeout);
+    if (!page || !Array.isArray(page.EnrichmentResult) || !("ContinuousToken" in page) || page.ContinuousToken != null && typeof page.ContinuousToken !== "string") throw new Error("Incomplete IcM enrichment page.");
+    for (const entry of page.EnrichmentResult) {
+      if (!entry || typeof entry.id !== "string" || !entry.id || ids.has(entry.id) || String(entry.IncidentId) !== String(id) || typeof entry.DataSourceName !== "string" || typeof entry.SubmittedBy !== "string" || !Number.isFinite(Date.parse(entry.CreatedDate)) || !entry.EnrichmentContent || typeof entry.EnrichmentContent.HtmlData !== "string" && typeof entry.EnrichmentContent.PlainTextData !== "string" && entry.EnrichmentContent.AdaptiveCardData == null) throw new Error("Invalid IcM enrichment entry.");
+      ids.add(entry.id);
+      entries.push(entry);
+    }
+    token = page.ContinuousToken || "";
+    if (entries.length > 500 || token && tokens.has(token) || tokens.size >= 100) throw new Error("IcM enrichment pagination exceeded its limit.");
+    tokens.add(token);
+  } while (token);
+  return entries;
+}
+
+// src/icm.ts
 import os7 from "node:os";
 import fs12 from "node:fs";
 import path7 from "node:path";
@@ -72461,11 +72516,11 @@ async function rolloutToken(infra = "int") {
 }
 async function fetchRollout(rolloutId, serviceGroup, infra = "int", timeout = 30) {
   const key = infraKey(infra);
-  const endpoint = INFRA_ENDPOINT[key];
-  if (!endpoint) throw new Error(`unknown infra ${infra}`);
+  const endpoint2 = INFRA_ENDPOINT[key];
+  if (!endpoint2) throw new Error(`unknown infra ${infra}`);
   const tok = await rolloutToken(infra);
   const sgq = encodeURIComponent(serviceGroup);
-  const url2 = `${endpoint}/api/rollouts/${rolloutId}?servicegroupname=${sgq}&api-version=2016-07-01&embed-detail=True`;
+  const url2 = `${endpoint2}/api/rollouts/${rolloutId}?servicegroupname=${sgq}&api-version=2016-07-01&embed-detail=True`;
   const r = await fetchWithTimeout(url2, { headers: { Authorization: `Bearer ${tok}` }, timeoutSeconds: timeout });
   if (!r.ok) throw new Error(`EV2 rollout ${r.status}: ${(await r.text()).slice(0, 300)}`);
   const d = await r.json();
