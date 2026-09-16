@@ -42,6 +42,7 @@ report them as requiring the separate operator workflow rather than silently ski
    or current recovery. Keep diagnostic details in internal investigation output
    under the caller's disclosure rules.
    For Geneva / ACIS failures, use [geneva-execution-logs](../geneva-execution-logs/SKILL.md) with the complete operation URL or execution key from the incident or Lionrock logs. Discover all matching nonzero Geneva ActivityIds before reading Audit and Tracing. Submission, execution and status polls can use different IDs. Do not join Lionrock ActivityTraceId directly to Geneva ActivityId. Verify the extension, operation, attempt and actual outcome, and preserve missing data or truncation. A recorded Failed status does not establish its underlying cause.
+   For monitor-raised incidents, use [geneva-metric-evidence](../geneva-metric-evidence/SKILL.md) to read both monitor versions and the matching metric series. Match the actual dimensions, sampling and evaluation window. Preserve missing points and incomplete queries, and do not infer recovery or root cause from a quiet metric.
 4. Read the TSG discriminator and test it against the observed case. A quiet log,
    familiar event token or old incident does not prove recovery or benign behavior.
 5. For a family, check whether members have different inner exceptions before

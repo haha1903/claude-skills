@@ -33,6 +33,8 @@ cheap; re-deriving a gotcha costs a day.
 | `genevaactions` / `Production` — Geneva / ACIS execution logs | [geneva-logs.md](references/geneva-logs.md) |
 | `kusto-query` helper CLI — the wrapper, not a source | [kusto-query-cli.md](references/kusto-query-cli.md) |
 
+For monitor configuration and metric series, use [geneva-metric-evidence](../geneva-metric-evidence/SKILL.md). Its Iris helper retains missing points, query diagnostics and configuration versions.
+
 ## The two rules that generalise
 
 **A 0-row result is not evidence of absence until the query is proven to work.**

@@ -14257,15 +14257,15 @@ var init_wsl_utils = __esm({
       const { stdout } = await executePowerShell(command, { powerShellPath: psPath });
       return stdout.trim();
     };
-    convertWslPathToWindows = async (path9) => {
-      if (/^[a-z]+:\/\//i.test(path9)) {
-        return path9;
+    convertWslPathToWindows = async (path10) => {
+      if (/^[a-z]+:\/\//i.test(path10)) {
+        return path10;
       }
       try {
-        const { stdout } = await execFile2("wslpath", ["-aw", path9], { encoding: "utf8" });
+        const { stdout } = await execFile2("wslpath", ["-aw", path10], { encoding: "utf8" });
         return stdout.trim();
       } catch {
-        return path9;
+        return path10;
       }
     };
   }
@@ -47666,8 +47666,8 @@ var require_utils2 = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path9) {
-      let input = path9;
+    function removeDotSegments(path10) {
+      let input = path10;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -48076,8 +48076,8 @@ var require_schemes = __commonJS({
       }
       if (wsComponent.resourceName) {
         const queryIndex = wsComponent.resourceName.indexOf("?");
-        const path9 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
-        wsComponent.path = path9 && path9 !== "/" ? path9 : void 0;
+        const path10 = queryIndex === -1 ? wsComponent.resourceName : wsComponent.resourceName.slice(0, queryIndex);
+        wsComponent.path = path10 && path10 !== "/" ? path10 : void 0;
         wsComponent.query = queryIndex === -1 ? void 0 : wsComponent.resourceName.slice(queryIndex + 1);
         wsComponent.resourceName = void 0;
       }
@@ -48145,7 +48145,7 @@ var require_schemes = __commonJS({
         serialize: httpSerialize
       }
     );
-    var https2 = (
+    var https3 = (
       /** @type {SchemeHandler} */
       {
         scheme: "https",
@@ -48194,7 +48194,7 @@ var require_schemes = __commonJS({
       /** @type {Record<SchemeName, SchemeHandler>} */
       {
         http: http3,
-        https: https2,
+        https: https3,
         ws,
         wss,
         urn,
@@ -51783,17 +51783,17 @@ var require_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    function visit_(key, node, visitor, path9) {
-      const ctrl = callVisitor(key, node, visitor, path9);
+    function visit_(key, node, visitor, path10) {
+      const ctrl = callVisitor(key, node, visitor, path10);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path9, ctrl);
-        return visit_(key, ctrl, visitor, path9);
+        replaceNode(key, path10, ctrl);
+        return visit_(key, ctrl, visitor, path10);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path9 = Object.freeze(path9.concat(node));
+          path10 = Object.freeze(path10.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = visit_(i, node.items[i], visitor, path9);
+            const ci = visit_(i, node.items[i], visitor, path10);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -51804,13 +51804,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path9 = Object.freeze(path9.concat(node));
-          const ck = visit_("key", node.key, visitor, path9);
+          path10 = Object.freeze(path10.concat(node));
+          const ck = visit_("key", node.key, visitor, path10);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = visit_("value", node.value, visitor, path9);
+          const cv = visit_("value", node.value, visitor, path10);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -51831,17 +51831,17 @@ var require_visit = __commonJS({
     visitAsync.BREAK = BREAK;
     visitAsync.SKIP = SKIP;
     visitAsync.REMOVE = REMOVE;
-    async function visitAsync_(key, node, visitor, path9) {
-      const ctrl = await callVisitor(key, node, visitor, path9);
+    async function visitAsync_(key, node, visitor, path10) {
+      const ctrl = await callVisitor(key, node, visitor, path10);
       if (identity.isNode(ctrl) || identity.isPair(ctrl)) {
-        replaceNode(key, path9, ctrl);
-        return visitAsync_(key, ctrl, visitor, path9);
+        replaceNode(key, path10, ctrl);
+        return visitAsync_(key, ctrl, visitor, path10);
       }
       if (typeof ctrl !== "symbol") {
         if (identity.isCollection(node)) {
-          path9 = Object.freeze(path9.concat(node));
+          path10 = Object.freeze(path10.concat(node));
           for (let i = 0; i < node.items.length; ++i) {
-            const ci = await visitAsync_(i, node.items[i], visitor, path9);
+            const ci = await visitAsync_(i, node.items[i], visitor, path10);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -51852,13 +51852,13 @@ var require_visit = __commonJS({
             }
           }
         } else if (identity.isPair(node)) {
-          path9 = Object.freeze(path9.concat(node));
-          const ck = await visitAsync_("key", node.key, visitor, path9);
+          path10 = Object.freeze(path10.concat(node));
+          const ck = await visitAsync_("key", node.key, visitor, path10);
           if (ck === BREAK)
             return BREAK;
           else if (ck === REMOVE)
             node.key = null;
-          const cv = await visitAsync_("value", node.value, visitor, path9);
+          const cv = await visitAsync_("value", node.value, visitor, path10);
           if (cv === BREAK)
             return BREAK;
           else if (cv === REMOVE)
@@ -51885,23 +51885,23 @@ var require_visit = __commonJS({
       }
       return visitor;
     }
-    function callVisitor(key, node, visitor, path9) {
+    function callVisitor(key, node, visitor, path10) {
       if (typeof visitor === "function")
-        return visitor(key, node, path9);
+        return visitor(key, node, path10);
       if (identity.isMap(node))
-        return visitor.Map?.(key, node, path9);
+        return visitor.Map?.(key, node, path10);
       if (identity.isSeq(node))
-        return visitor.Seq?.(key, node, path9);
+        return visitor.Seq?.(key, node, path10);
       if (identity.isPair(node))
-        return visitor.Pair?.(key, node, path9);
+        return visitor.Pair?.(key, node, path10);
       if (identity.isScalar(node))
-        return visitor.Scalar?.(key, node, path9);
+        return visitor.Scalar?.(key, node, path10);
       if (identity.isAlias(node))
-        return visitor.Alias?.(key, node, path9);
+        return visitor.Alias?.(key, node, path10);
       return void 0;
     }
-    function replaceNode(key, path9, node) {
-      const parent = path9[path9.length - 1];
+    function replaceNode(key, path10, node) {
+      const parent = path10[path10.length - 1];
       if (identity.isCollection(parent)) {
         parent.items[key] = node;
       } else if (identity.isPair(parent)) {
@@ -52511,10 +52511,10 @@ var require_Collection = __commonJS({
     var createNode = require_createNode();
     var identity = require_identity();
     var Node = require_Node();
-    function collectionFromPath(schema, path9, value) {
+    function collectionFromPath(schema, path10, value) {
       let v = value;
-      for (let i = path9.length - 1; i >= 0; --i) {
-        const k = path9[i];
+      for (let i = path10.length - 1; i >= 0; --i) {
+        const k = path10[i];
         if (typeof k === "number" && Number.isInteger(k) && k >= 0) {
           const a = [];
           a[k] = v;
@@ -52533,7 +52533,7 @@ var require_Collection = __commonJS({
         sourceObjects: /* @__PURE__ */ new Map()
       });
     }
-    var isEmptyPath = (path9) => path9 == null || typeof path9 === "object" && !!path9[Symbol.iterator]().next().done;
+    var isEmptyPath = (path10) => path10 == null || typeof path10 === "object" && !!path10[Symbol.iterator]().next().done;
     var Collection = class extends Node.NodeBase {
       constructor(type, schema) {
         super(type);
@@ -52563,11 +52563,11 @@ var require_Collection = __commonJS({
        * be a Pair instance or a `{ key, value }` object, which may not have a key
        * that already exists in the map.
        */
-      addIn(path9, value) {
-        if (isEmptyPath(path9))
+      addIn(path10, value) {
+        if (isEmptyPath(path10))
           this.add(value);
         else {
-          const [key, ...rest] = path9;
+          const [key, ...rest] = path10;
           const node = this.get(key, true);
           if (identity.isCollection(node))
             node.addIn(rest, value);
@@ -52581,8 +52581,8 @@ var require_Collection = __commonJS({
        * Removes a value from the collection.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path9) {
-        const [key, ...rest] = path9;
+      deleteIn(path10) {
+        const [key, ...rest] = path10;
         if (rest.length === 0)
           return this.delete(key);
         const node = this.get(key, true);
@@ -52596,8 +52596,8 @@ var require_Collection = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path9, keepScalar) {
-        const [key, ...rest] = path9;
+      getIn(path10, keepScalar) {
+        const [key, ...rest] = path10;
         const node = this.get(key, true);
         if (rest.length === 0)
           return !keepScalar && identity.isScalar(node) ? node.value : node;
@@ -52615,8 +52615,8 @@ var require_Collection = __commonJS({
       /**
        * Checks if the collection includes a value with the key `key`.
        */
-      hasIn(path9) {
-        const [key, ...rest] = path9;
+      hasIn(path10) {
+        const [key, ...rest] = path10;
         if (rest.length === 0)
           return this.has(key);
         const node = this.get(key, true);
@@ -52626,8 +52626,8 @@ var require_Collection = __commonJS({
        * Sets a value in this collection. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path9, value) {
-        const [key, ...rest] = path9;
+      setIn(path10, value) {
+        const [key, ...rest] = path10;
         if (rest.length === 0) {
           this.set(key, value);
         } else {
@@ -55142,9 +55142,9 @@ var require_Document = __commonJS({
           this.contents.add(value);
       }
       /** Adds a value to the document. */
-      addIn(path9, value) {
+      addIn(path10, value) {
         if (assertCollection(this.contents))
-          this.contents.addIn(path9, value);
+          this.contents.addIn(path10, value);
       }
       /**
        * Create a new `Alias` node, ensuring that the target `node` has the required anchor.
@@ -55219,14 +55219,14 @@ var require_Document = __commonJS({
        * Removes a value from the document.
        * @returns `true` if the item was found and removed.
        */
-      deleteIn(path9) {
-        if (Collection.isEmptyPath(path9)) {
+      deleteIn(path10) {
+        if (Collection.isEmptyPath(path10)) {
           if (this.contents == null)
             return false;
           this.contents = null;
           return true;
         }
-        return assertCollection(this.contents) ? this.contents.deleteIn(path9) : false;
+        return assertCollection(this.contents) ? this.contents.deleteIn(path10) : false;
       }
       /**
        * Returns item at `key`, or `undefined` if not found. By default unwraps
@@ -55241,10 +55241,10 @@ var require_Document = __commonJS({
        * scalar values from their surrounding node; to disable set `keepScalar` to
        * `true` (collections are always returned intact).
        */
-      getIn(path9, keepScalar) {
-        if (Collection.isEmptyPath(path9))
+      getIn(path10, keepScalar) {
+        if (Collection.isEmptyPath(path10))
           return !keepScalar && identity.isScalar(this.contents) ? this.contents.value : this.contents;
-        return identity.isCollection(this.contents) ? this.contents.getIn(path9, keepScalar) : void 0;
+        return identity.isCollection(this.contents) ? this.contents.getIn(path10, keepScalar) : void 0;
       }
       /**
        * Checks if the document includes a value with the key `key`.
@@ -55255,10 +55255,10 @@ var require_Document = __commonJS({
       /**
        * Checks if the document includes a value at `path`.
        */
-      hasIn(path9) {
-        if (Collection.isEmptyPath(path9))
+      hasIn(path10) {
+        if (Collection.isEmptyPath(path10))
           return this.contents !== void 0;
-        return identity.isCollection(this.contents) ? this.contents.hasIn(path9) : false;
+        return identity.isCollection(this.contents) ? this.contents.hasIn(path10) : false;
       }
       /**
        * Sets a value in this document. For `!!set`, `value` needs to be a
@@ -55275,13 +55275,13 @@ var require_Document = __commonJS({
        * Sets a value in this document. For `!!set`, `value` needs to be a
        * boolean to add/remove the item from the set.
        */
-      setIn(path9, value) {
-        if (Collection.isEmptyPath(path9)) {
+      setIn(path10, value) {
+        if (Collection.isEmptyPath(path10)) {
           this.contents = value;
         } else if (this.contents == null) {
-          this.contents = Collection.collectionFromPath(this.schema, Array.from(path9), value);
+          this.contents = Collection.collectionFromPath(this.schema, Array.from(path10), value);
         } else if (assertCollection(this.contents)) {
-          this.contents.setIn(path9, value);
+          this.contents.setIn(path10, value);
         }
       }
       /**
@@ -57241,9 +57241,9 @@ var require_cst_visit = __commonJS({
     visit.BREAK = BREAK;
     visit.SKIP = SKIP;
     visit.REMOVE = REMOVE;
-    visit.itemAtPath = (cst, path9) => {
+    visit.itemAtPath = (cst, path10) => {
       let item = cst;
-      for (const [field, index] of path9) {
+      for (const [field, index] of path10) {
         const tok = item?.[field];
         if (tok && "items" in tok) {
           item = tok.items[index];
@@ -57252,23 +57252,23 @@ var require_cst_visit = __commonJS({
       }
       return item;
     };
-    visit.parentCollection = (cst, path9) => {
-      const parent = visit.itemAtPath(cst, path9.slice(0, -1));
-      const field = path9[path9.length - 1][0];
+    visit.parentCollection = (cst, path10) => {
+      const parent = visit.itemAtPath(cst, path10.slice(0, -1));
+      const field = path10[path10.length - 1][0];
       const coll = parent?.[field];
       if (coll && "items" in coll)
         return coll;
       throw new Error("Parent collection not found");
     };
-    function _visit(path9, item, visitor) {
-      let ctrl = visitor(item, path9);
+    function _visit(path10, item, visitor) {
+      let ctrl = visitor(item, path10);
       if (typeof ctrl === "symbol")
         return ctrl;
       for (const field of ["key", "value"]) {
         const token = item[field];
         if (token && "items" in token) {
           for (let i = 0; i < token.items.length; ++i) {
-            const ci = _visit(Object.freeze(path9.concat([[field, i]])), token.items[i], visitor);
+            const ci = _visit(Object.freeze(path10.concat([[field, i]])), token.items[i], visitor);
             if (typeof ci === "number")
               i = ci - 1;
             else if (ci === BREAK)
@@ -57279,10 +57279,10 @@ var require_cst_visit = __commonJS({
             }
           }
           if (typeof ctrl === "function" && field === "key")
-            ctrl = ctrl(item, path9);
+            ctrl = ctrl(item, path10);
         }
       }
-      return typeof ctrl === "function" ? ctrl(item, path9) : ctrl;
+      return typeof ctrl === "function" ? ctrl(item, path10) : ctrl;
     }
     exports.visit = visit;
   }
@@ -59281,10 +59281,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path9) {
-  if (!path9)
+function getElementAtPath(obj, path10) {
+  if (!path10)
     return obj;
-  return path9.reduce((acc, key) => acc?.[key], obj);
+  return path10.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -59693,11 +59693,11 @@ function explicitlyAborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path9, issues) {
+function prefixIssues(path10, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path9);
+    iss.path.unshift(path10);
     return iss;
   });
 }
@@ -59844,16 +59844,16 @@ function flattenError(error2, mapper = (issue2) => issue2.message) {
 }
 function formatError(error2, mapper = (issue2) => issue2.message) {
   const fieldErrors = { _errors: [] };
-  const processError = (error3, path9 = []) => {
+  const processError = (error3, path10 = []) => {
     for (const issue2 of error3.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
-        issue2.errors.map((issues) => processError({ issues }, [...path9, ...issue2.path]));
+        issue2.errors.map((issues) => processError({ issues }, [...path10, ...issue2.path]));
       } else if (issue2.code === "invalid_key") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
       } else if (issue2.code === "invalid_element") {
-        processError({ issues: issue2.issues }, [...path9, ...issue2.path]);
+        processError({ issues: issue2.issues }, [...path10, ...issue2.path]);
       } else {
-        const fullpath = [...path9, ...issue2.path];
+        const fullpath = [...path10, ...issue2.path];
         if (fullpath.length === 0) {
           fieldErrors._errors.push(mapper(issue2));
         } else {
@@ -71265,8 +71265,8 @@ async function icmRest(method, url2, body, timeout = 60) {
   });
   return parseODataResponse(await r.text());
 }
-function odata(method, path9, body, timeout = 60) {
-  return icmRest(method, `${ODATA_BASE}/${path9}`, body, timeout);
+function odata(method, path10, body, timeout = 60) {
+  return icmRest(method, `${ODATA_BASE}/${path10}`, body, timeout);
 }
 function getIncident(id, timeout = 60) {
   return odata("GET", `incidents(${id})`, void 0, timeout);
@@ -71296,8 +71296,8 @@ function buildPendingFilterApi2(serviceId, opts = {}) {
 function sevRank(s) {
   return Number(s) === 25 ? 2.5 : Number(s);
 }
-async function api2Get(path9, timeout = 60) {
-  return icmRest("GET", `${API2_INCIDENT_BASE}/${path9}`, void 0, timeout);
+async function api2Get(path10, timeout = 60) {
+  return icmRest("GET", `${API2_INCIDENT_BASE}/${path10}`, void 0, timeout);
 }
 async function pendingActionsApi2(opts = {}) {
   const serviceId = requireConfig((c) => c.icm.owningServiceId, "icm.owningServiceId");
@@ -71305,8 +71305,8 @@ async function pendingActionsApi2(opts = {}) {
   const encoded = encodeURIComponent(filter);
   const rows = [];
   for (let skip = 0; ; skip += API2_PAGE_SIZE) {
-    const path9 = `incidents?$filter=${encoded}&$top=${API2_PAGE_SIZE}&$skip=${skip}`;
-    const res = await api2Get(path9, opts.timeout ?? 60);
+    const path10 = `incidents?$filter=${encoded}&$top=${API2_PAGE_SIZE}&$skip=${skip}`;
+    const res = await api2Get(path10, opts.timeout ?? 60);
     const page = res?.value;
     const batch = Array.isArray(page) ? page : [];
     rows.push(...batch);
@@ -71658,8 +71658,8 @@ async function listByFilter(filter, opts = {}) {
   const select = opts.select ?? SAVED_QUERY_SELECT;
   const rows = [];
   for (let skip = 0; ; skip += API2_PAGE_SIZE) {
-    const path9 = `incidents?$filter=${encoded}&$top=${API2_PAGE_SIZE}&$skip=${skip}&$select=${encodeURIComponent(select)}&$expand=CustomFields,AlertSource`;
-    const res = await api2Get(path9, opts.timeout ?? 60);
+    const path10 = `incidents?$filter=${encoded}&$top=${API2_PAGE_SIZE}&$skip=${skip}&$select=${encodeURIComponent(select)}&$expand=CustomFields,AlertSource`;
+    const res = await api2Get(path10, opts.timeout ?? 60);
     const page = res?.value;
     const batch = Array.isArray(page) ? page : [];
     rows.push(...batch);
@@ -74223,13 +74223,13 @@ function refParts(ref) {
     buildId: String(ref.buildId)
   };
 }
-async function abhGet(path9, timeoutSeconds = 60) {
+async function abhGet(path10, timeoutSeconds = 60) {
   const token = await abhToken();
-  const res = await fetchWithTimeout(`${ABH_ENDPOINT}${path9}`, {
+  const res = await fetchWithTimeout(`${ABH_ENDPOINT}${path10}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     timeoutSeconds
   });
-  if (!res.ok) throw new Error(`ABH ${path9} -> HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) throw new Error(`ABH ${path10} -> HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return await res.json();
 }
 async function onboardingStatus(ref) {
@@ -74633,24 +74633,24 @@ var LionrockApproversClient = class {
     this.auth = options.auth;
     this.transport = options.fetch ?? fetch;
   }
-  async get(path9) {
+  async get(path10) {
     this.token ??= this.auth.getToken({ resourceUrl: this.server.url, scopes: [this.server.scope] });
-    const res = await this.transport(new URL(path9, new URL(this.server.url).origin), {
+    const res = await this.transport(new URL(path10, new URL(this.server.url).origin), {
       method: "GET",
       headers: { Authorization: `Bearer ${await this.token}`, Accept: "application/json" },
       redirect: "manual",
       signal: AbortSignal.timeout(3e4)
     });
-    if (!res.ok) throw new Error(`Lionrock API ${res.status} on ${path9}; current approvers could not be read.`);
+    if (!res.ok) throw new Error(`Lionrock API ${res.status} on ${path10}; current approvers could not be read.`);
     if (!res.headers.get("content-type")?.includes("application/json")) {
-      throw new Error(`Invalid Lionrock response on ${path9}: expected JSON (possibly a login page).`);
+      throw new Error(`Invalid Lionrock response on ${path10}: expected JSON (possibly a login page).`);
     }
     return res.json();
   }
   async getRequestApprovers(args) {
     const { requestId, subRequestId } = requestIds(args);
-    const path9 = `/api/requests/${requestId}/subrequests/${subRequestId}`;
-    const [rawSub, rawApprovals] = await Promise.all([this.get(path9), this.get(`${path9}/approval`)]);
+    const path10 = `/api/requests/${requestId}/subrequests/${subRequestId}`;
+    const [rawSub, rawApprovals] = await Promise.all([this.get(path10), this.get(`${path10}/approval`)]);
     const sub = record2(rawSub, "sub-request");
     const detail = record2(rawApprovals, "approvals");
     if (typeof sub.Region !== "string" || !sub.Region.trim() || typeof sub.Status !== "string") {
@@ -74706,6 +74706,128 @@ var LionrockApproversClient = class {
     };
   }
 };
+
+// src/geneva-metrics.ts
+var geneva_metrics_exports = {};
+__export(geneva_metrics_exports, {
+  metricRequest: () => metricRequest,
+  readConfig: () => readConfig,
+  readMetricSeries: () => readMetricSeries,
+  readMonitorConfigs: () => readMonitorConfigs,
+  runMetricSdk: () => runMetricSdk
+});
+import { execFile as execFile8 } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import path9 from "node:path";
+import https2 from "node:https";
+function metricRequest(o) {
+  const start = Date.parse(o.start), end = Date.parse(o.end);
+  if (![o.start, o.end].every((v) => /T.*(?:Z|[+-]\d\d:\d\d)$/.test(v)) || !Number.isFinite(start) || !Number.isFinite(end) || end <= start || end - start > 2 * 864e5) throw new Error("Use absolute zoned times and a window of at most two days");
+  if (![o.account, o.namespace, o.metric, o.certPath, o.keyPath].every((v) => typeof v === "string" && v.length > 0)) throw new Error("Account, namespace, metric and certificate paths are required");
+  const maxSeries = o.maxSeries ?? 20;
+  if (!Number.isInteger(maxSeries) || maxSeries < 1 || maxSeries > 50) throw new Error("maxSeries must be between 1 and 50");
+  if (!o.dimensions.length || o.dimensions.length > 20 || new Set(o.dimensions).size !== o.dimensions.length || !o.samplingTypes.length || o.samplingTypes.length > 5) throw new Error("Provide unique dimensions and one to five sampling types");
+  const literals = (values) => values.map((v) => {
+    if (typeof v !== "string" || !v || v.length > 256) throw new Error("Metric query identifiers and values must contain 1 to 256 characters");
+    return JSON.stringify(v);
+  }).join(", ");
+  let query = `metricNamespace(${JSON.stringify(o.namespace)}).metric(${JSON.stringify(o.metric)}).dimensions(${literals(o.dimensions)}).samplingTypes(${literals(o.samplingTypes)})`;
+  for (const [dimension, values] of Object.entries(o.filters)) {
+    if (!o.dimensions.includes(dimension) || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(dimension) || !values.length || values.length > 50) throw new Error("Filters must select declared dimensions with one to fifty values");
+    query += ` | where ${dimension} in (${literals(values)})`;
+  }
+  return { request: { Account: o.account, Namespace: o.namespace, Query: query + ` | take ${maxSeries + 1}`, Start: new Date(start).toISOString(), End: new Date(end).toISOString(), CertPath: o.certPath, KeyPath: o.keyPath }, maxSeries };
+}
+function runMetricSdk(input) {
+  const helper = process.env.IRIS_GENEVA_METRICS_HELPER ?? path9.join(process.env.IRIS_ROOT ?? path9.join(homedir(), "Projects/iris"), "artifacts/geneva-metrics/GenevaMetrics.dll");
+  return new Promise((resolve2, reject) => {
+    const child = execFile8("dotnet", [helper], { timeout: 6e4, maxBuffer: 8 * 1024 * 1024 }, (error2, stdout, stderr) => {
+      if (error2) reject(new Error(`Geneva metrics SDK failed: ${stderr.slice(0, 2e3) || error2.message}`));
+      else resolve2(stdout);
+    });
+    child.stdin.end(input);
+  });
+}
+async function readMetricSeries(o, run2 = runMetricSdk) {
+  const { request: request2, maxSeries } = metricRequest(o);
+  const base = { account: o.account, namespace: o.namespace, metric: o.metric, query: request2.Query, start: request2.Start, end: request2.End, queriedAt: (/* @__PURE__ */ new Date()).toISOString() };
+  try {
+    const data = JSON.parse(await run2(JSON.stringify(request2)));
+    if (!Array.isArray(data.TimeSeriesSets) || !Array.isArray(data.ExecutionMessages) || typeof data.State !== "string") throw new Error("Unexpected Geneva metrics SDK result");
+    let truncated = false, missingPoints = 0, observedPoints = 0, zeroPoints = 0;
+    const sets = data.TimeSeriesSets.map((set) => {
+      if (!Array.isArray(set.TimeSeriesData) || !set.ResultsMetadata) throw new Error("Unexpected Geneva time-series set");
+      truncated ||= set.TimeSeriesData.length > maxSeries;
+      return { ...set, TimeSeriesData: set.TimeSeriesData.slice(0, maxSeries).map((series) => ({
+        ...series,
+        SamplingTypesData: Object.fromEntries(series.SamplingTypesData.map(({ Key: sampling, Value: values }) => {
+          if (!Array.isArray(values)) throw new Error("Unexpected Geneva sampling data");
+          return [sampling, values.map((value) => {
+            if (typeof value !== "number" || !Number.isFinite(value)) {
+              missingPoints++;
+              return null;
+            }
+            observedPoints++;
+            if (value === 0) zeroPoints++;
+            return value;
+          })];
+        }))
+      })) };
+    });
+    const complete = data.State === "Success" && !data.ExecutionMessages.some((m) => m.Severity === "Error");
+    return { ...base, status: complete ? observedPoints ? "ok" : "empty" : "incomplete", state: data.State, requestId: data.RequestID, sets, messages: data.ExecutionMessages, truncated, missingPoints, observedPoints, zeroPoints };
+  } catch (error2) {
+    return { ...base, status: "unavailable", error: String(error2 instanceof Error ? error2.message : error2).slice(0, 2e3) };
+  }
+}
+function readConfig(url2, o) {
+  return new Promise((resolve2, reject) => {
+    const req = https2.get(url2, { cert: readFileSync(o.certPath), key: readFileSync(o.keyPath), minVersion: "TLSv1.2", maxVersion: "TLSv1.2", headers: { Accept: "application/json" } }, (res) => {
+      const chunks = [];
+      let size = 0;
+      res.on("data", (chunk) => {
+        size += chunk.length;
+        if (size > 5 * 1024 * 1024) req.destroy(new Error("Monitor configuration exceeds 5 MB"));
+        else chunks.push(chunk);
+      });
+      res.on("error", reject);
+      res.on("end", () => {
+        const text2 = Buffer.concat(chunks).toString("utf8");
+        if (res.statusCode !== 200) {
+          reject(new Error(`Geneva config HTTP ${res.statusCode}: ${text2.slice(0, 1500)}`));
+          return;
+        }
+        try {
+          resolve2(JSON.parse(text2));
+        } catch {
+          reject(new Error("Geneva config returned invalid JSON"));
+        }
+      });
+    });
+    req.setTimeout(45e3, () => req.destroy(new Error("Geneva configuration read timed out")));
+    req.on("error", reject);
+  });
+}
+async function readMonitorConfigs(o, read = readConfig) {
+  const stamp2 = new URL(o.stamp);
+  if (stamp2.protocol !== "https:" || !stamp2.hostname.endsWith(".microsoftmetrics.com") || stamp2.username || stamp2.password || stamp2.search || stamp2.hash || stamp2.pathname !== "/" || stamp2.port) throw new Error("Use a public Geneva metrics HTTPS home stamp without a path or port");
+  if (!o.account) throw new Error("Monitoring account is required");
+  const account = encodeURIComponent(o.account);
+  const paths = {
+    v1: `/api/v1/config/metrics/tenant/${account}/component/COMPONENT/event/EVENT/monitors/MONITOR?component=.%2A&event=.%2A&monitor=.%2A`,
+    v2: `/api/v1/config/monitor/tenant/${account}/configurations`
+  };
+  const result = await Promise.all(Object.entries(paths).map(async ([kind, path10]) => {
+    const url2 = new URL(path10, stamp2);
+    try {
+      return [kind, { status: "ok", url: url2.href, data: await read(url2, o) }];
+    } catch (error2) {
+      return [kind, { status: "unavailable", url: url2.href, error: String(error2).slice(0, 2e3) }];
+    }
+  }));
+  return { account: o.account, queriedAt: (/* @__PURE__ */ new Date()).toISOString(), ...Object.fromEntries(result) };
+}
 export {
   Agent365Client,
   AgentMailClient,
@@ -74747,6 +74869,7 @@ export {
   ev2_exports as ev2,
   geneva_exports as geneva,
   geneva_logs_exports as genevaLogs,
+  geneva_metrics_exports as genevaMetrics,
   getMailPinState,
   graph_exports as graph,
   icm_exports as icm,
