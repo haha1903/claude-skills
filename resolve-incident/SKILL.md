@@ -41,6 +41,7 @@ report them as requiring the separate operator workflow rather than silently ski
    A nonzero script exit or SQL timeout alone does not establish its deeper cause
    or current recovery. Keep diagnostic details in internal investigation output
    under the caller's disclosure rules.
+   For Geneva / ACIS failures, use [geneva-execution-logs](../geneva-execution-logs/SKILL.md) with the complete operation URL or execution key from the incident or Lionrock logs. Discover all matching nonzero Geneva ActivityIds before reading Audit and Tracing. Submission, execution and status polls can use different IDs. Do not join Lionrock ActivityTraceId directly to Geneva ActivityId. Verify the extension, operation, attempt and actual outcome, and preserve missing data or truncation. A recorded Failed status does not establish its underlying cause.
 4. Read the TSG discriminator and test it against the observed case. A quiet log,
    familiar event token or old incident does not prove recovery or benign behavior.
 5. For a family, check whether members have different inner exceptions before

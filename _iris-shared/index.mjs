@@ -33,6 +33,7 @@ export const ado = mod.ado;
 export const boards = mod.boards;
 export const aigen = mod.aigen;
 export const geneva = mod.geneva;
+export const genevaLogs = mod.genevaLogs;
 export const safefly = mod.safefly;
 export const abh = mod.abh;
 export const webjobs = mod.webjobs;
