@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
@@ -22,4 +23,4 @@ export async function run(args, load, output = console) {
     return [result, result.v1, result.v2].some(r => ["unavailable", "incomplete"].includes(r?.status)) ? 1 : 0;
   } catch (error) { output.error(error.message); return 2; }
 }
-if (process.argv[1] === fileURLToPath(import.meta.url)) process.exitCode = await run(process.argv.slice(2));
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await run(process.argv.slice(2));

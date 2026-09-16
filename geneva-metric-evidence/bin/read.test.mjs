@@ -19,3 +19,27 @@ test("transport failures and partial data return nonzero with evidence preserved
   }
   let error; assert.equal(await run([], load, { log: assert.fail, error: s => { error = s; } }), 2); assert.match(error, /Choose/);
 });
+
+
+// The container exposes its Git checkout through a symlink at CLAUDE_CONFIG_DIR/skills.
+test("running through a symlink executes the CLI and emits a result", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, symlinkSync, rmSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const { spawnSync } = await import("node:child_process");
+  const dir = mkdtempSync(join(tmpdir(), "geneva-cli-link-"));
+  try {
+    mkdirSync(join(dir, "dist"));
+    writeFileSync(join(dir, "package.json"), '{"type":"module"}');
+    writeFileSync(join(dir, "dist/index.js"), 'export const lionrock = {}; export const genevaLogs = {getExecutionLogs: async () => ({audit:{status:"ok"},tracing:{status:"ok"}})}; export const genevaMetrics = {readMonitorConfigs: async () => ({v1:{status:"ok"},v2:{status:"ok"}})};');
+    symlinkSync(fileURLToPath(new URL("../", import.meta.url)), join(dir, "linked-skill"), "dir");
+    const entry = join(dir, "linked-skill/bin/read.mjs");
+    const commandArgs = ["monitors"];
+    const result = spawnSync(process.execPath, [entry, ...commandArgs], {env:{...process.env,IRIS_ROOT:dir},encoding:"utf8"});
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.trim(), "The CLI silently skipped its entrypoint");
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.v1.status, "ok");
+  } finally { rmSync(dir, {recursive:true,force:true}); }
+});

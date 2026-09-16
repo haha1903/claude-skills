@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
+import { realpathSync } from "node:fs";
 
 export async function main(args, load = () => import("../../_iris-shared/index.mjs")) {
   const { values } = parseArgs({ args, options: Object.fromEntries([
@@ -33,4 +34,4 @@ export async function run(args, load, output = console) {
   }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) process.exitCode = await run(process.argv.slice(2));
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = await run(process.argv.slice(2));
