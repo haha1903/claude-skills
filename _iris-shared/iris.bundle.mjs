@@ -3046,9 +3046,9 @@ var init_ScopeSet = __esm({
        * Returns the scopes as an array of string values
        */
       asArray() {
-        const array2 = [];
-        this.scopes.forEach((val) => array2.push(val));
-        return array2;
+        const array3 = [];
+        this.scopes.forEach((val) => array3.push(val));
+        return array3;
       }
       /**
        * Prints scopes into a space-delimited string
@@ -11634,29 +11634,29 @@ var require_lodash = __commonJS({
     var reIsOctal = /^0o[0-7]+$/i;
     var reIsUint = /^(?:0|[1-9]\d*)$/;
     var freeParseInt = parseInt;
-    function arrayMap(array2, iteratee) {
-      var index = -1, length = array2 ? array2.length : 0, result = Array(length);
+    function arrayMap(array3, iteratee) {
+      var index = -1, length = array3 ? array3.length : 0, result = Array(length);
       while (++index < length) {
-        result[index] = iteratee(array2[index], index, array2);
+        result[index] = iteratee(array3[index], index, array3);
       }
       return result;
     }
-    function baseFindIndex(array2, predicate, fromIndex, fromRight) {
-      var length = array2.length, index = fromIndex + (fromRight ? 1 : -1);
+    function baseFindIndex(array3, predicate, fromIndex, fromRight) {
+      var length = array3.length, index = fromIndex + (fromRight ? 1 : -1);
       while (fromRight ? index-- : ++index < length) {
-        if (predicate(array2[index], index, array2)) {
+        if (predicate(array3[index], index, array3)) {
           return index;
         }
       }
       return -1;
     }
-    function baseIndexOf(array2, value, fromIndex) {
+    function baseIndexOf(array3, value, fromIndex) {
       if (value !== value) {
-        return baseFindIndex(array2, baseIsNaN, fromIndex);
+        return baseFindIndex(array3, baseIsNaN, fromIndex);
       }
-      var index = fromIndex - 1, length = array2.length;
+      var index = fromIndex - 1, length = array3.length;
       while (++index < length) {
-        if (array2[index] === value) {
+        if (array3[index] === value) {
           return index;
         }
       }
@@ -11672,9 +11672,9 @@ var require_lodash = __commonJS({
       }
       return result;
     }
-    function baseValues(object3, props) {
+    function baseValues(object4, props) {
       return arrayMap(props, function(key) {
-        return object3[key];
+        return object4[key];
       });
     }
     function overArg(func, transform2) {
@@ -11698,13 +11698,13 @@ var require_lodash = __commonJS({
       }
       return result;
     }
-    function baseKeys(object3) {
-      if (!isPrototype(object3)) {
-        return nativeKeys(object3);
+    function baseKeys(object4) {
+      if (!isPrototype(object4)) {
+        return nativeKeys(object4);
       }
       var result = [];
-      for (var key in Object(object3)) {
-        if (hasOwnProperty.call(object3, key) && key != "constructor") {
+      for (var key in Object(object4)) {
+        if (hasOwnProperty.call(object4, key) && key != "constructor") {
           result.push(key);
         }
       }
@@ -11790,11 +11790,11 @@ var require_lodash = __commonJS({
       var isBinary = reIsBinary.test(value);
       return isBinary || reIsOctal.test(value) ? freeParseInt(value.slice(2), isBinary ? 2 : 8) : reIsBadHex.test(value) ? NAN : +value;
     }
-    function keys(object3) {
-      return isArrayLike(object3) ? arrayLikeKeys(object3) : baseKeys(object3);
+    function keys(object4) {
+      return isArrayLike(object4) ? arrayLikeKeys(object4) : baseKeys(object4);
     }
-    function values(object3) {
-      return object3 ? baseValues(object3, keys(object3)) : [];
+    function values(object4) {
+      return object4 ? baseValues(object4, keys(object4)) : [];
     }
     module.exports = includes;
   }
@@ -12084,11 +12084,11 @@ var require_sign = __commonJS({
       exp: { isValid: isNumber, message: '"exp" should be a number of seconds' },
       nbf: { isValid: isNumber, message: '"nbf" should be a number of seconds' }
     };
-    function validate(schema, allowUnknown, object3, parameterName) {
-      if (!isPlainObject3(object3)) {
+    function validate(schema, allowUnknown, object4, parameterName) {
+      if (!isPlainObject3(object4)) {
         throw new Error('Expected "' + parameterName + '" to be a plain object.');
       }
-      Object.keys(object3).forEach(function(key) {
+      Object.keys(object4).forEach(function(key) {
         const validator = schema[key];
         if (!validator) {
           if (!allowUnknown) {
@@ -12096,7 +12096,7 @@ var require_sign = __commonJS({
           }
           return;
         }
-        if (!validator.isValid(object3[key])) {
+        if (!validator.isValid(object4[key])) {
           throw new Error(validator.message);
         }
       });
@@ -14272,9 +14272,9 @@ var init_wsl_utils = __esm({
 });
 
 // node_modules/define-lazy-prop/index.js
-function defineLazyProperty(object3, propertyName, valueGetter) {
-  const define = (value) => Object.defineProperty(object3, propertyName, { value, enumerable: true, writable: true });
-  Object.defineProperty(object3, propertyName, {
+function defineLazyProperty(object4, propertyName, valueGetter) {
+  const define = (value) => Object.defineProperty(object4, propertyName, { value, enumerable: true, writable: true });
+  Object.defineProperty(object4, propertyName, {
     configurable: true,
     enumerable: true,
     get() {
@@ -14286,7 +14286,7 @@ function defineLazyProperty(object3, propertyName, valueGetter) {
       define(value);
     }
   });
-  return object3;
+  return object4;
 }
 var init_define_lazy_prop = __esm({
   "node_modules/define-lazy-prop/index.js"() {
@@ -37142,8 +37142,8 @@ var require_utils = __commonJS({
     exports.validateDigestValue = exports.findAncestorNs = exports.derToPem = exports.pemToDer = exports.normalizePem = exports.BASE64_REGEX = exports.EXTRACT_X509_CERTS = exports.PEM_FORMAT_REGEX = exports.encodeSpecialCharactersInText = exports.encodeSpecialCharactersInAttribute = exports.findChilds = exports.findChildren = exports.findAttr = exports.isArrayHasLength = void 0;
     var xpath = require_xpath();
     var isDomNode = require_dist();
-    function isArrayHasLength(array2) {
-      return Array.isArray(array2) && array2.length > 0;
+    function isArrayHasLength(array3) {
+      return Array.isArray(array3) && array3.length > 0;
     }
     exports.isArrayHasLength = isArrayHasLength;
     function attrEqualsExplicitly(attr, localName, namespace) {
@@ -37198,8 +37198,8 @@ var require_utils = __commonJS({
       });
     }
     exports.encodeSpecialCharactersInAttribute = encodeSpecialCharactersInAttribute;
-    function encodeSpecialCharactersInText(text) {
-      return text.replace(/([&<>\r])/g, function(str, item) {
+    function encodeSpecialCharactersInText(text2) {
+      return text2.replace(/([&<>\r])/g, function(str, item) {
         return xml_special_to_encoded_text[item];
       });
     }
@@ -37788,11 +37788,11 @@ var require_conventions = __commonJS({
         }
       }
     }
-    function freeze(object3, oc) {
+    function freeze(object4, oc) {
       if (oc === void 0) {
         oc = Object;
       }
-      return oc && typeof oc.freeze === "function" ? oc.freeze(object3) : object3;
+      return oc && typeof oc.freeze === "function" ? oc.freeze(object4) : object4;
     }
     function assign2(target, source) {
       if (target === null || typeof target !== "object") {
@@ -39023,13 +39023,13 @@ var require_dom = __commonJS({
       substringData: function(offset, count) {
         return this.data.substring(offset, offset + count);
       },
-      appendData: function(text) {
-        text = this.data + text;
-        this.nodeValue = this.data = text;
-        this.length = text.length;
+      appendData: function(text2) {
+        text2 = this.data + text2;
+        this.nodeValue = this.data = text2;
+        this.length = text2.length;
       },
-      insertData: function(offset, text) {
-        this.replaceData(offset, 0, text);
+      insertData: function(offset, text2) {
+        this.replaceData(offset, 0, text2);
       },
       appendChild: function(newChild) {
         throw new Error(ExceptionMessage[HIERARCHY_REQUEST_ERR]);
@@ -39037,12 +39037,12 @@ var require_dom = __commonJS({
       deleteData: function(offset, count) {
         this.replaceData(offset, count, "");
       },
-      replaceData: function(offset, count, text) {
+      replaceData: function(offset, count, text2) {
         var start = this.data.substring(0, offset);
         var end = this.data.substring(offset + count);
-        text = start + text + end;
-        this.nodeValue = this.data = text;
-        this.length = text.length;
+        text2 = start + text2 + end;
+        this.nodeValue = this.data = text2;
+        this.length = text2.length;
       }
     };
     _extends(CharacterData, Node);
@@ -39052,11 +39052,11 @@ var require_dom = __commonJS({
       nodeName: "#text",
       nodeType: TEXT_NODE,
       splitText: function(offset) {
-        var text = this.data;
-        var newText = text.substring(offset);
-        text = text.substring(0, offset);
-        this.data = this.nodeValue = text;
-        this.length = text.length;
+        var text2 = this.data;
+        var newText = text2.substring(offset);
+        text2 = text2.substring(0, offset);
+        this.data = this.nodeValue = text2;
+        this.length = text2.length;
         var newNode = this.ownerDocument.createTextNode(newText);
         if (this.parentNode) {
           this.parentNode.insertBefore(newNode, this.nextSibling);
@@ -39393,8 +39393,8 @@ var require_dom = __commonJS({
       });
       return destRoot;
     }
-    function __set__(object3, key, value) {
-      object3[key] = value;
+    function __set__(object4, key, value) {
+      object4[key] = value;
     }
     try {
       if (Object.defineProperty) {
@@ -39441,8 +39441,8 @@ var require_dom = __commonJS({
             }
           }
         });
-        __set__ = function(object3, key, value) {
-          object3["$$" + key] = value;
+        __set__ = function(object4, key, value) {
+          object4["$$" + key] = value;
         };
       }
     } catch (e) {
@@ -41690,9 +41690,9 @@ var require_sax = __commonJS({
           if (tagStart < 0) {
             if (!source.substr(start).match(/^\s*$/)) {
               var doc = domBuilder.doc;
-              var text = doc.createTextNode(source.substr(start));
-              doc.appendChild(text);
-              domBuilder.currentElement = text;
+              var text2 = doc.createTextNode(source.substr(start));
+              doc.appendChild(text2);
+              domBuilder.currentElement = text2;
             }
             return;
           }
@@ -42039,14 +42039,14 @@ var require_sax = __commonJS({
     function parseHtmlSpecialContent(source, elStartEnd, tagName, entityReplacer, domBuilder) {
       if (/^(?:script|textarea)$/i.test(tagName)) {
         var elEndStart = source.indexOf("</" + tagName + ">", elStartEnd);
-        var text = source.substring(elStartEnd + 1, elEndStart);
-        if (/[&<]/.test(text)) {
+        var text2 = source.substring(elStartEnd + 1, elEndStart);
+        if (/[&<]/.test(text2)) {
           if (/^script$/i.test(tagName)) {
-            domBuilder.characters(text, 0, text.length);
+            domBuilder.characters(text2, 0, text2.length);
             return elEndStart;
           }
-          text = text.replace(/&#?\w+;/g, entityReplacer);
-          domBuilder.characters(text, 0, text.length);
+          text2 = text2.replace(/&#?\w+;/g, entityReplacer);
+          domBuilder.characters(text2, 0, text2.length);
           return elEndStart;
         }
       }
@@ -43515,14 +43515,14 @@ function statusName(status) {
 function buildOperationBody(o) {
   return { parameters: o.parameters, extension: o.extension, id: o.operationId, endpoint: o.endpoint };
 }
-function parseSubmitResponse(status, text) {
-  if (status !== 200 && status !== 202) throw new Error(`GA submit failed HTTP ${status}: ${text.slice(0, 400)}`);
+function parseSubmitResponse(status, text2) {
+  if (status !== 200 && status !== 202) throw new Error(`GA submit failed HTTP ${status}: ${text2.slice(0, 400)}`);
   let loc;
   try {
-    loc = JSON.parse(text).operationLocation;
+    loc = JSON.parse(text2).operationLocation;
   } catch {
   }
-  if (!loc) throw new Error(`GA submit returned no operationLocation: ${text.slice(0, 400)}`);
+  if (!loc) throw new Error(`GA submit returned no operationLocation: ${text2.slice(0, 400)}`);
   return loc;
 }
 function tls12RequestOptions(url2, method) {
@@ -49028,7 +49028,7 @@ var require_core = __commonJS({
       errorsText(errors = this.errors, { separator = ", ", dataVar = "data" } = {}) {
         if (!errors || errors.length === 0)
           return "No errors";
-        return errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).reduce((text, msg) => text + separator + msg);
+        return errors.map((e) => `${dataVar}${e.instancePath} ${e.message}`).reduce((text2, msg) => text2 + separator + msg);
       }
       $dataMetaSchema(metaSchema, keywordsJsonPointers) {
         const rules = this.RULES.all;
@@ -52671,14 +52671,14 @@ var require_foldFlowLines = __commonJS({
     var FOLD_FLOW = "flow";
     var FOLD_BLOCK = "block";
     var FOLD_QUOTED = "quoted";
-    function foldFlowLines(text, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
+    function foldFlowLines(text2, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
       if (!lineWidth || lineWidth < 0)
-        return text;
+        return text2;
       if (lineWidth < minContentWidth)
         minContentWidth = 0;
       const endStep = Math.max(1 + minContentWidth, 1 + lineWidth - indent.length);
-      if (text.length <= endStep)
-        return text;
+      if (text2.length <= endStep)
+        return text2;
       const folds = [];
       const escapedFolds = {};
       let end = lineWidth - indent.length;
@@ -52695,14 +52695,14 @@ var require_foldFlowLines = __commonJS({
       let escStart = -1;
       let escEnd = -1;
       if (mode === FOLD_BLOCK) {
-        i = consumeMoreIndentedLines(text, i, indent.length);
+        i = consumeMoreIndentedLines(text2, i, indent.length);
         if (i !== -1)
           end = i + endStep;
       }
-      for (let ch; ch = text[i += 1]; ) {
+      for (let ch; ch = text2[i += 1]; ) {
         if (mode === FOLD_QUOTED && ch === "\\") {
           escStart = i;
-          switch (text[i + 1]) {
+          switch (text2[i + 1]) {
             case "x":
               i += 3;
               break;
@@ -52719,12 +52719,12 @@ var require_foldFlowLines = __commonJS({
         }
         if (ch === "\n") {
           if (mode === FOLD_BLOCK)
-            i = consumeMoreIndentedLines(text, i, indent.length);
+            i = consumeMoreIndentedLines(text2, i, indent.length);
           end = i + indent.length + endStep;
           split = void 0;
         } else {
           if (ch === " " && prev && prev !== " " && prev !== "\n" && prev !== "	") {
-            const next = text[i + 1];
+            const next = text2[i + 1];
             if (next && next !== " " && next !== "\n" && next !== "	")
               split = i;
           }
@@ -52736,12 +52736,12 @@ var require_foldFlowLines = __commonJS({
             } else if (mode === FOLD_QUOTED) {
               while (prev === " " || prev === "	") {
                 prev = ch;
-                ch = text[i += 1];
+                ch = text2[i += 1];
                 overflow = true;
               }
               const j = i > escEnd + 1 ? i - 2 : escStart - 1;
               if (escapedFolds[j])
-                return text;
+                return text2;
               folds.push(j);
               escapedFolds[j] = true;
               end = j + endStep;
@@ -52756,39 +52756,39 @@ var require_foldFlowLines = __commonJS({
       if (overflow && onOverflow)
         onOverflow();
       if (folds.length === 0)
-        return text;
+        return text2;
       if (onFold)
         onFold();
-      let res = text.slice(0, folds[0]);
+      let res = text2.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
         const fold = folds[i2];
-        const end2 = folds[i2 + 1] || text.length;
+        const end2 = folds[i2 + 1] || text2.length;
         if (fold === 0)
           res = `
-${indent}${text.slice(0, end2)}`;
+${indent}${text2.slice(0, end2)}`;
         else {
           if (mode === FOLD_QUOTED && escapedFolds[fold])
-            res += `${text[fold]}\\`;
+            res += `${text2[fold]}\\`;
           res += `
-${indent}${text.slice(fold + 1, end2)}`;
+${indent}${text2.slice(fold + 1, end2)}`;
         }
       }
       return res;
     }
-    function consumeMoreIndentedLines(text, i, indent) {
+    function consumeMoreIndentedLines(text2, i, indent) {
       let end = i;
       let start = i + 1;
-      let ch = text[start];
+      let ch = text2[start];
       while (ch === " " || ch === "	") {
         if (i < start + indent) {
-          ch = text[++i];
+          ch = text2[++i];
         } else {
           do {
-            ch = text[++i];
+            ch = text2[++i];
           } while (ch && ch !== "\n");
           end = i;
           start = i + 1;
-          ch = text[start];
+          ch = text2[start];
         }
       }
       return end;
@@ -59199,8 +59199,8 @@ function getEnumValues(entries) {
   const values = Object.entries(entries).filter(([k, _]) => numericValues.indexOf(+k) === -1).map(([_, v]) => v);
   return values;
 }
-function joinValues(array2, separator = "|") {
-  return array2.map((val) => stringifyPrimitive(val)).join(separator);
+function joinValues(array3, separator = "|") {
+  return array3.map((val) => stringifyPrimitive(val)).join(separator);
 }
 function jsonStringifyReplacer(_, value) {
   if (typeof value === "bigint")
@@ -59237,9 +59237,9 @@ function floatSafeRemainder(val, step) {
   return ratio - roundedRatio;
 }
 var EVALUATING = /* @__PURE__ */ Symbol("evaluating");
-function defineLazy(object3, key, getter) {
+function defineLazy(object4, key, getter) {
   let value = void 0;
-  Object.defineProperty(object3, key, {
+  Object.defineProperty(object4, key, {
     get() {
       if (value === EVALUATING) {
         return void 0;
@@ -59251,7 +59251,7 @@ function defineLazy(object3, key, getter) {
       return value;
     },
     set(v) {
-      Object.defineProperty(object3, key, {
+      Object.defineProperty(object4, key, {
         value: v
         // configurable: true,
       });
@@ -69109,7 +69109,7 @@ var StreamableHTTPClientTransport = class {
         this._sessionId = sessionId;
       }
       if (!response.ok) {
-        const text = await response.text().catch(() => null);
+        const text2 = await response.text().catch(() => null);
         if (response.status === 401 && this._authProvider) {
           if (this._hasCompletedAuthFlow) {
             throw new StreamableHTTPError(401, "Server returned 401 after successful authentication");
@@ -69155,7 +69155,7 @@ var StreamableHTTPClientTransport = class {
             return this.send(message);
           }
         }
-        throw new StreamableHTTPError(response.status, `Error POSTing to endpoint: ${text}`);
+        throw new StreamableHTTPError(response.status, `Error POSTing to endpoint: ${text2}`);
       }
       this._hasCompletedAuthFlow = false;
       this._lastUpscopingHeader = void 0;
@@ -69354,7 +69354,7 @@ var McpServerClient = class _McpServerClient {
     await this.transport.close();
   }
 };
-function decodeAgent365Text(text) {
+function decodeAgent365Text(text2) {
   const tryParse = (s) => {
     try {
       return { ok: true, v: JSON.parse(s) };
@@ -69362,7 +69362,7 @@ function decodeAgent365Text(text) {
       return { ok: false };
     }
   };
-  let p = tryParse(text);
+  let p = tryParse(text2);
   if (p.ok) {
     const v = p.v;
     if (v && typeof v === "object" && !Array.isArray(v) && typeof v.rawResponse === "string") {
@@ -69370,17 +69370,17 @@ function decodeAgent365Text(text) {
     }
     return v;
   }
-  const idx = text.indexOf("{");
+  const idx = text2.indexOf("{");
   if (idx > 0) {
-    p = tryParse(text.slice(idx));
+    p = tryParse(text2.slice(idx));
     if (p.ok) return p.v;
   }
-  const arrIdx = text.indexOf("[");
+  const arrIdx = text2.indexOf("[");
   if (arrIdx > 0) {
-    p = tryParse(text.slice(arrIdx));
+    p = tryParse(text2.slice(arrIdx));
     if (p.ok) return p.v;
   }
-  return text;
+  return text2;
 }
 function isSessionNotFound(e) {
   const msg = e instanceof Error ? e.message : String(e);
@@ -70936,14 +70936,14 @@ async function httpPost(url2, token, body, timeout) {
     body: JSON.stringify(body),
     timeoutSeconds: timeout
   });
-  const text = await r.text();
-  if (r.status === 401 || r.status === 403) throw new KustoAuthError(r.status, `Kusto auth ${r.status}: ${text.slice(0, 200)}`);
-  if (!text.trim()) throw new Error(`Empty response (status ${r.status})`);
-  if (!r.ok) throw new KustoRejectedError(r.status, text);
+  const text2 = await r.text();
+  if (r.status === 401 || r.status === 403) throw new KustoAuthError(r.status, `Kusto auth ${r.status}: ${text2.slice(0, 200)}`);
+  if (!text2.trim()) throw new Error(`Empty response (status ${r.status})`);
+  if (!r.ok) throw new KustoRejectedError(r.status, text2);
   try {
-    return JSON.parse(text);
+    return JSON.parse(text2);
   } catch {
-    throw new Error(`Non-JSON response (status ${r.status}): ${text.slice(0, 500)}`);
+    throw new Error(`Non-JSON response (status ${r.status}): ${text2.slice(0, 500)}`);
   }
 }
 function isRetryable(e) {
@@ -70953,12 +70953,12 @@ function isRetryable(e) {
   return e.status === 400 && /General_BadRequest/i.test(e.body);
 }
 var isRetryableForTest = isRetryable;
-function classifyResponseForTest(status, text) {
+function classifyResponseForTest(status, text2) {
   if (status === 401 || status === 403) return { kind: "auth", status };
-  if (!text.trim()) return { kind: "empty", status };
+  if (!text2.trim()) return { kind: "empty", status };
   if (status < 200 || status >= 300) return { kind: "rejected", status };
   try {
-    JSON.parse(text);
+    JSON.parse(text2);
     return { kind: "ok", status };
   } catch {
     return { kind: "unparseable", status };
@@ -71246,8 +71246,8 @@ async function pendingActions(owner, timeout = 180) {
   }
   return rows;
 }
-function parseODataResponse(text) {
-  const t = text.trim();
+function parseODataResponse(text2) {
+  const t = text2.trim();
   if (!t) return null;
   try {
     return JSON.parse(t);
@@ -72159,8 +72159,8 @@ function buildResolveBody(alias) {
 function buildTransferBody(teamId, tenantId) {
   return { TransferParameters: { OwningTenantPublicId: tenantId, OwningTeamPublicId: teamId } };
 }
-function buildCommentEntry(text, renderType = "Plaintext") {
-  return { NewDescriptionEntry: { Text: text, RenderType: renderType } };
+function buildCommentEntry(text2, renderType = "Plaintext") {
+  return { NewDescriptionEntry: { Text: text2, RenderType: renderType } };
 }
 function mitigate(id, reason, o = {}) {
   return odata("POST", `incidents(${id})/MitigateIncident`, buildMitigateBody(reason, o));
@@ -72180,8 +72180,8 @@ function assign(id, alias, timeout = 60) {
 function transfer(id, owningTeamId, owningTenantId, timeout = 60) {
   return odata("POST", `incidents(${id})/TransferIncident`, buildTransferBody(owningTeamId, owningTenantId), timeout);
 }
-function addComment(id, text, renderType = "Plaintext", timeout = 60) {
-  return update(id, buildCommentEntry(text, renderType), timeout);
+function addComment(id, text2, renderType = "Plaintext", timeout = 60) {
+  return update(id, buildCommentEntry(text2, renderType), timeout);
 }
 async function bulkRun(itemFn, items, workers = 8) {
   const ok = [];
@@ -72440,41 +72440,135 @@ function infraKey(infra) {
   const k = (infra || "").toLowerCase();
   return { test: "int", prod: "prod", int: "int" }[k] ?? k;
 }
+var object3 = (value) => value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
+var array2 = (value) => Array.isArray(value) ? value : [];
+var text = (value) => typeof value === "string" && value.trim() ? value : void 0;
+var MAX_EVIDENCE = 12;
+var MAX_MESSAGE = 4e3;
 function actionsOf(rollout) {
-  const rgs = rollout?.ResourceGroups ?? [];
   const out = [];
-  for (const rg of rgs) {
-    for (const res of rg.Resources ?? []) {
-      for (const act of res.Actions ?? []) out.push(act);
+  for (const rgValue of array2(object3(rollout).ResourceGroups)) {
+    const rg = object3(rgValue);
+    for (const resValue of array2(rg.Resources)) {
+      const res = object3(resValue);
+      for (const act of array2(res.Actions)) out.push({ action: object3(act), resourceGroup: text(rg.Name), resource: text(res.Name) });
     }
   }
   return out;
 }
-function errInfo(act) {
-  return act.ActionOperationInfo?.ErrorInfo ?? {};
+function diagnosticText(log) {
+  const match = /^(.*\b(?:error|exception|failed|fatal|timeout)\b.*)$/im.exec(log);
+  return log.slice(match?.index ?? 0);
+}
+function boundedMessage(message, isLog) {
+  if (message.length <= MAX_MESSAGE) return message;
+  if (!isLog) return message.slice(0, MAX_MESSAGE);
+  const focus = diagnosticText(message);
+  if (focus.length <= MAX_MESSAGE) return `[earlier log omitted]
+${focus}`.slice(-MAX_MESSAGE);
+  return `${focus.slice(0, 2400)}
+[log excerpt omitted]
+${focus.slice(-1500)}`;
+}
+function failedAction(action, resourceGroup, resource) {
+  const info = object3(action.ActionOperationInfo);
+  const error2 = object3(info.ErrorInfo);
+  if (action.Status !== "Failed" && !text(error2.ErrorCode)) return void 0;
+  const evidence = [];
+  let evidenceTruncated = false;
+  const add = (item, isLog = false) => {
+    if (evidence.length >= MAX_EVIDENCE) {
+      evidenceTruncated = true;
+      return;
+    }
+    const message = item.message;
+    evidence.push({ ...item, ...message ? {
+      message: boundedMessage(message, isLog),
+      ...message.length > MAX_MESSAGE ? { truncated: true } : {}
+    } : {} });
+  };
+  const addError = (value, source, context, depth = 0) => {
+    const err = object3(value);
+    if (!Object.keys(err).length) return;
+    if (depth > 5 || evidence.length >= MAX_EVIDENCE) {
+      evidenceTruncated = true;
+      return;
+    }
+    const errorCode = text(err.code) ?? text(err.ErrorCode);
+    const message = text(err.message) ?? text(err.ErrorReason);
+    if (errorCode || message) add({ ...context, source, errorCode, message });
+    array2(err.details).forEach((detail, i) => addError(detail, `${source}.details[${i}]`, context, depth + 1));
+    if (err.innererror) addError(err.innererror, `${source}.innererror`, context, depth + 1);
+  };
+  addError(error2, "ActionOperationInfo.ErrorInfo", {});
+  array2(action.ResourceOperations).forEach((value, i) => {
+    const op = object3(value);
+    if (op.ProvisioningState === "Succeeded") return;
+    const source = `ResourceOperations[${i}]`;
+    const context = { resourceName: text(op.ResourceName), resourceType: text(op.ResourceType) };
+    addError(op.ErrorInfo, `${source}.ErrorInfo`, context);
+    let status = op.StatusMessage;
+    if (typeof status === "string") {
+      try {
+        status = JSON.parse(status);
+      } catch {
+        if (text(status)) add({ ...context, source: `${source}.StatusMessage`, message: status });
+        return;
+      }
+    }
+    if (typeof status === "string" && text(status)) add({ ...context, source: `${source}.StatusMessage`, message: status });
+    const detail = object3(status);
+    addError(detail.error ?? detail, `${source}.StatusMessage${detail.error ? ".error" : ""}`, context);
+    if (text(detail.ExecutionMessage)) add({ ...context, source: `${source}.StatusMessage.ExecutionMessage`, message: text(detail.ExecutionMessage) });
+    array2(detail.Shells).forEach((shellValue, j) => {
+      const shell = object3(shellValue);
+      const execution = object3(object3(shell.Properties).ExecutionView);
+      const exitCode = typeof execution.ExitCode === "number" ? execution.ExitCode : void 0;
+      const failed = exitCode !== void 0 && exitCode !== 0 || ["Error", "Failed"].includes(String(execution.DetailStatus));
+      if (!failed && (exitCode === 0 || execution.DetailStatus === "Succeeded")) return;
+      const log = text(shell.Log);
+      if (!log && !failed) return;
+      add({
+        ...context,
+        source: `${source}.StatusMessage.Shells[${j}]${log ? ".Log" : ".Properties.ExecutionView"}`,
+        shellName: text(shell.Name),
+        exitCode,
+        startTime: text(execution.StartTime),
+        finishTime: text(execution.FinishTime),
+        message: log ?? `Shell execution failed${exitCode !== void 0 ? ` with exit code ${exitCode}` : ""}.`
+      }, true);
+    });
+  });
+  const reason = text(error2.ErrorReason) ?? evidence.find((e) => e.message)?.message ?? "";
+  return {
+    name: text(action.Name),
+    step: text(action.StepName),
+    errorCode: text(error2.ErrorCode) ?? evidence.find((e) => e.errorCode)?.errorCode,
+    errorReason: (text(error2.ErrorReason) ? reason : diagnosticText(reason)).slice(0, 400),
+    resourceGroup,
+    resource,
+    correlationId: text(info.CorrelationId),
+    startTime: text(info.StartTime),
+    endTime: text(info.EndTime),
+    ...evidence.length ? { evidence } : {},
+    ...evidenceTruncated ? { evidenceTruncated: true } : {}
+  };
 }
 function extractFailedActions(rollout) {
-  const failed = [];
-  for (const act of actionsOf(rollout)) {
-    const err = errInfo(act);
-    if (act.Status === "Failed" || err.ErrorCode) {
-      failed.push({ name: act.Name, step: act.StepName, errorCode: err.ErrorCode, errorReason: (err.ErrorReason ?? "").slice(0, 400) });
-    }
-  }
-  return failed;
+  return actionsOf(rollout).flatMap(({ action, resourceGroup, resource }) => {
+    const failed = failedAction(action, resourceGroup, resource);
+    return failed ? [failed] : [];
+  });
 }
 function summarizeActions(rollout) {
   const counts = {};
   const running = [];
-  const failed = [];
-  for (const act of actionsOf(rollout)) {
-    const st = act.Status;
+  for (const { action } of actionsOf(rollout)) {
+    const st = text(action.Status) ?? "Unknown";
     counts[st] = (counts[st] ?? 0) + 1;
-    const err = errInfo(act);
-    if (st === "Running") running.push({ name: act.Name, step: act.StepName });
-    if (st === "Failed" || err.ErrorCode) failed.push({ name: act.Name, step: act.StepName, errorCode: err.ErrorCode, errorReason: (err.ErrorReason ?? "").slice(0, 400) });
+    if (st === "Running") running.push({ name: text(action.Name), step: text(action.StepName) });
   }
-  return { status: rollout?.Status, counts, running, failed };
+  return { status: text(object3(rollout).Status), counts, running, failed: extractFailedActions(rollout) };
 }
 function childRings(rollout) {
   const out = [];
@@ -72632,8 +72726,8 @@ function withApiVersion(url2, version4 = "7.1") {
 function extractEnvironments(release) {
   return (release?.environments ?? []).map((e) => ({ name: e.name, status: e.status }));
 }
-function findPortalUrlInLog(text) {
-  const m = /ra\.ev2portal\.azure\.net\/#\/rollouts\/\S+/.exec(text || "");
+function findPortalUrlInLog(text2) {
+  const m = /ra\.ev2portal\.azure\.net\/#\/rollouts\/\S+/.exec(text2 || "");
   return m ? m[0].replace(/[.,)]+$/, "") : null;
 }
 function recentRuns(defId, opts = {}) {
@@ -73582,17 +73676,17 @@ async function gql(query, variables = {}, opts = {}) {
     body: JSON.stringify({ query, variables }),
     timeoutSeconds: opts.timeoutSeconds ?? 90
   });
-  const text = await res.text();
+  const text2 = await res.text();
   let body;
   try {
-    body = JSON.parse(text);
+    body = JSON.parse(text2);
   } catch {
-    throw new Error(`SafeFly GraphQL HTTP ${res.status}: ${text.slice(0, 400)}`);
+    throw new Error(`SafeFly GraphQL HTTP ${res.status}: ${text2.slice(0, 400)}`);
   }
   if (body.errors?.length) {
     throw new Error(`SafeFly GraphQL: ${body.errors.map((e) => e.message ?? "?").join(" | ").slice(0, 600)}`);
   }
-  if (!res.ok) throw new Error(`SafeFly GraphQL HTTP ${res.status}: ${text.slice(0, 400)}`);
+  if (!res.ok) throw new Error(`SafeFly GraphQL HTTP ${res.status}: ${text2.slice(0, 400)}`);
   if (body.data === void 0) throw new Error("SafeFly GraphQL: response had no data");
   return body.data;
 }

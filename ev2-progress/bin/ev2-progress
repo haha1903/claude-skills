@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Recursively drill into an EV2 rollout and its child ring rollouts.
+
+A ring-orchestration rollout (Lionrock Prod, region buildouts, ...) has an EMPTY
+top-level ResourceGroups — it is only an orchestrator. The real deploy actions
+live in child ring rollouts referenced by StageInfos[].RingRolloutId. Plain
+`ev2-rollout` reports "Running, 0 actions" for these and hides the progress.
+This walks every ring and prints each level's running/failed actions.
+
+Usage:
+    ev2-progress <rolloutId>   [--service-group=...] [--infra=int|prod]
+    ev2-progress <portalUrl>   [--infra=...]              # parses the URL
+    ev2-progress --json ...                               # full tree as JSON
+
+Defaults to BET Int Bootstrap service group if not given.
+"""
+import argparse
+import json
+import sys
+
+from msapi import ev2
+
+ap = argparse.ArgumentParser()
+ap.add_argument("target", help="rollout id OR ra.ev2portal.azure.net URL")
+ap.add_argument("--service-group", "-g",
+                default="Microsoft.AzureGlobal.BuildoutAutomation.BET.Int.Bootstrap")
+ap.add_argument("--infra", "-i", default="int", choices=["int", "prod"])
+ap.add_argument("--json", action="store_true", help="Dump full progress tree as JSON")
+args = ap.parse_args()
+
+# Accept either a bare rollout id or a full portal URL.
+parsed = ev2.parse_portal_url(args.target)
+if parsed:
+    rollout_id = parsed["rolloutId"]
+    service_group = parsed["serviceGroup"]
+    infra = parsed["infra"]
+else:
+    rollout_id = args.target
+    service_group = args.service_group
+    infra = args.infra
+
+tree = ev2.rollout_progress(rollout_id, service_group, infra)
+
+if args.json:
+    print(json.dumps(tree, indent=2))
+    sys.exit(0)
+
+any_failed = False
+for row in ev2.flatten_progress(tree):
+    if row.get("error"):
+        print(f"{row['path']}: ERROR {row['error']}")
+        continue
+    c = row["counts"]
+    counts = " ".join(f"{k}={v}" for k, v in sorted(c.items())) or "(no direct actions)"
+    print(f"{row['path']}  [{row['status']}]  {counts}")
+    for r in row["running"]:
+        print(f"    RUN  {r['name']} / {r['step']}")
+    for f in row["failed"]:
+        any_failed = True
+        print(f"    FAIL {f['name']} / {f['step']}: {f['errorCode']}")
+        if f.get("errorReason"):
+            print(f"         {f['errorReason']}")
+
+sys.exit(1 if any_failed else 0)
