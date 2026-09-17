@@ -73801,9 +73801,12 @@ async function getRequestJobs(input, query = queryKusto) {
     if (input.kind !== "on-demand") throw new Error("subRequestId applies only to on-demand requests");
   }
   const id = JSON.stringify(input.requestId);
+  const onDemand = `CisJob() | where ParentRequestId == ${id} and Cloud =~ ${JSON.stringify(input.cloud)}`;
+  const mappingSource = input.subRequestId === void 0 ? onDemand : `let candidates = materialize(${onDemand} and SubRequestId in (0, ${input.subRequestId}));
+candidates | where SubRequestId == ${input.subRequestId} or toscalar(candidates | where SubRequestId == ${input.subRequestId} | count) == 0`;
   const kql = input.kind === "planned-quota" ? `PlannedQuotaRequestExecution() | where tostring(RequestId) == ${id}
 | project RequestId, JobId=CisJobId, JobType=CisJobType, Status, Region, ServiceTreeId, Blueprint, PlanVersion, CreatedTime, CompletedTime
-| order by CreatedTime desc, JobId asc | take ${options.maxRows + 1}` : `CisJob() | where ParentRequestId == ${id} and Cloud =~ ${JSON.stringify(input.cloud)}${input.subRequestId === void 0 ? "" : ` and SubRequestId == ${input.subRequestId}`}
+| order by CreatedTime desc, JobId asc | take ${options.maxRows + 1}` : `${mappingSource}
 | project ParentRequestId, SubRequestId, JobId, Cloud, State, JobType, TaskId, TaskDisplayName, TaskState, CreatedTime, LastUpdatedTime, CompletedTime, IsArchived
 | order by CreatedTime desc, JobId asc, TaskId asc | take ${options.maxRows + 1}`;
   const mapping = await read(options, kql, options.maxRows, query);
