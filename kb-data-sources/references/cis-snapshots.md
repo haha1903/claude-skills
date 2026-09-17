@@ -14,3 +14,5 @@
 Measured 2026-09-17 with the personal identity: a retained ReceiveLionrockPlan job had one Finished job snapshot and two Finished tasks. The reported delays were approximately 295 seconds for the job and 168 to 220 seconds for its tasks. This verifies reported state only. Lionrock Bot's azcispub grant is tracked separately as T01.
 
 A second real check followed planned-quota request 11315072 to its TenantBasedOnDemandProvisioning job and one Finished task. The job reporting delay was about 137 seconds and the task delay about 905 seconds. Do not generalize one sample into a fixed reporting-delay bound.
+
+A retained on-demand mapping for request 11020748 has `SubRequestId = 0`. Zero is a valid stored value and must remain selectable. The Public CisJob source contained 11,297 rows with newest CreatedTime at 2026-01-20 during this read. Its lack of recent mappings does not establish that newer requests did not execute through CIS. Use the matching request records and application logs to verify the actual path.
