@@ -8,7 +8,7 @@ summary: Correlate a Lionrock request with CIS job and task snapshots
 
 Read `kb-data-sources` and its [CIS source card](../kb-data-sources/references/cis-snapshots.md). This capability only reads. It does not retry, change requests or post replies.
 
-1. If the incident supplies a Lionrock request, read its job mapping first. Choose the request flow from the actual request. Planned quota and on-demand use different sources. A planned-quota record can have CIS JobType `OnDemandProvision`, so do not choose the request flow from JobType alone. Replace sample values using the incident.
+1. If the incident supplies a complete FRP/CIS JobId, verify its cloud and proceed directly to step 2. When only a Lionrock request is known, read its job mapping first. Choose the request flow from the actual request. Planned quota and on-demand use different sources. A planned-quota record can have CIS JobType `OnDemandProvision`, so do not choose the request flow from JobType alone. Replace sample values using the incident.
 
 ```bash
 node ~/.claude/skills/cis-evidence/bin/read.mjs lookup \
@@ -19,6 +19,8 @@ node ~/.claude/skills/cis-evidence/bin/read.mjs lookup \
 For on-demand requests use `--kind on-demand --request <parent-number>` and, when known, `--sub-request <number>`. The helper returns matching child associations first, falling back to parent associations (`SubRequestId=0`) when no child match exists. Read every relevant mapping row. Match the failing attempt using job type, creation time, sub-request and archived status. A parent can have several jobs or tasks. A missing JobId does not establish that no fulfillment was needed. The planned-quota mapping has no Cloud field. Verify the cloud from the incident or request before the next step.
 
 Check `RequestSource` and `SubRequest.FulfillChannel` before expecting an on-demand CIS association. Current `CisJob` writes record incoming CIS RP tasks. The former outgoing CIS fulfillment channel is deprecated, and `CisTask` is an obsolete table. For UI, Public API or EV2 requests without a CIS mapping, follow `SubRequest()`, `OperationLog()` and the actual fulfillment channel, then correlated Lionrock/Geneva evidence. Do not substitute a similarly numbered planned-quota request. Empty or legacy `State`/`TaskState` fields in the mapping are not live CIS status.
+
+For migrated fulfillment, start from the actual FRP/CIS job and verified cloud supplied by the incident. Fulfillment now runs through FRP in-cloud, so an old Lionrock-created fulfill job is not required. FRP can still use CIS JobType `OnDemandProvision`. When a job is already known, proceed directly to snapshots without requiring a Lionrock request mapping. Public SQL records do not establish in-cloud FRP quota balance or consumption.
 
 2. Read snapshots for the matching complete JobId, verified cloud and a window around that execution. A GUID fragment is not a complete JobId.
 
