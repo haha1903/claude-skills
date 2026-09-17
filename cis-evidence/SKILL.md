@@ -16,7 +16,9 @@ node ~/.claude/skills/cis-evidence/bin/read.mjs lookup \
   --cloud Public --kind planned-quota --request 11315072
 ```
 
-For on-demand requests use `--kind on-demand --request <parent-number>` and, when known, `--sub-request <number>`. Read every relevant mapping row. Match the failing attempt using job type, creation time, sub-request and archived status. A parent can have several jobs or tasks. A missing JobId does not establish that no fulfillment was needed. The planned-quota mapping has no Cloud field. Verify the cloud from the incident or request before the next step.
+For on-demand requests use `--kind on-demand --request <parent-number>` and, when known, `--sub-request <number>`. The helper returns matching child associations first, falling back to parent associations (`SubRequestId=0`) when no child match exists. Read every relevant mapping row. Match the failing attempt using job type, creation time, sub-request and archived status. A parent can have several jobs or tasks. A missing JobId does not establish that no fulfillment was needed. The planned-quota mapping has no Cloud field. Verify the cloud from the incident or request before the next step.
+
+Check `RequestSource` and `SubRequest.FulfillChannel` before expecting an on-demand CIS association. Current `CisJob` writes record incoming CIS RP tasks. The former outgoing CIS fulfillment channel is deprecated, and `CisTask` is an obsolete table. For UI, Public API or EV2 requests without a CIS mapping, follow `SubRequest()`, `OperationLog()` and the actual fulfillment channel, then correlated Lionrock/Geneva evidence. Do not substitute a similarly numbered planned-quota request. Empty or legacy `State`/`TaskState` fields in the mapping are not live CIS status.
 
 2. Read snapshots for the matching complete JobId, verified cloud and a window around that execution. A GUID fragment is not a complete JobId.
 

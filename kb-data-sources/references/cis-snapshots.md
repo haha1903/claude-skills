@@ -15,4 +15,13 @@ Measured 2026-09-17 with the personal identity: a retained ReceiveLionrockPlan j
 
 A second real check followed planned-quota request 11315072 to its TenantBasedOnDemandProvisioning job and one Finished task. The job reporting delay was about 137 seconds and the task delay about 905 seconds. Do not generalize one sample into a fixed reporting-delay bound.
 
-A retained on-demand mapping for request 11020748 has `SubRequestId = 0`. Zero is a valid stored value and must remain selectable. The Public CisJob source contained 11,297 rows with newest CreatedTime at 2026-01-20 during this read. Its lack of recent mappings does not establish that newer requests did not execute through CIS. Use the matching request records and application logs to verify the actual path.
+A retained on-demand mapping for request 11020748 has `SubRequestId = 0`, while its actual child is 11020748-1. Zero denotes a parent association. When a child-specific lookup has no exact match, return the parent associations, as `CisJobContext.GetCisJobEntityByRequestIdAsync` does. Preserve exact legacy child associations when present.
+
+Code and direct SQL checks on 2026-09-17 established the mapping scope:
+
+- `PublicApiController.CreateRequestForCISAsync` writes `CisJob` for incoming CIS RP tasks with `SubRequestId=0`. The controller documents the former outgoing CIS fulfillment channel as deprecated. `CisTaskEntity` and its mapping are obsolete.
+- Public `dbo.CisJob` has 11,297 rows, newest CreatedTime 2026-01-20. The newest `dbo.Request` with `RequestSource=CIS` is the same request 11020748 at the same time. Direct SQL and the external function agree. `dbo.CisTask` has 1,254 legacy rows with maximum RequestId 5120807. It is not a newer mapping source.
+- Requests created from September 1 through the read came from LionrockUI, PublicApi, EV2 and FieldForm. Their children use Lionrock, RDQuota, AutoComplete and pending channels. `RequestProvider.FulfillSubRequestAsync` routes automation through Lionrock and otherwise creates tickets. Check the request source, child channel and operation log instead of requiring a CIS job for every on-demand request.
+- `CisJobEntity.State` and `TaskState` are obsolete fields. An empty value is not a failed or missing CIS execution. Use actual snapshots when a CIS association exists.
+
+A real comparison for IcM 866508814 found that auto-mitigation after job start did not imply completion. The job snapshot at 2026-09-17 00:18:24 UTC was InProgress with one blocked task. Task snapshots from September 16 showed a pre-buildout task blocked by incident 772792189 and a post-buildout task NotStarted. Keep their different observation times and do not infer the underlying cause or later recovery.
