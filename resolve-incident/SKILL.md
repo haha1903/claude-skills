@@ -75,7 +75,16 @@ instead of claiming `Internal.CustomerBlocked` has been resolved.
 
 ## Deliver through the caller
 
-For internal drafts containing KQL, follow the query-link presentation in
+An automatic IcM comment or shadow draft is a compact update, not the full
+investigation report. Use two to four short sentences, normally 80 to 120 words:
+the finding, one material uncertainty and the next useful step. Prefer one or two
+clickable evidence links over embedded KQL or raw logs. Keep detailed queries,
+timelines, full correlation IDs and historical family comparisons in work notes.
+Mention a mixed-cause family briefly only when it changes the proposed action.
+Internal access permits diagnostic evidence but does not require displaying all
+of it. Expand when a person explicitly requests the detailed investigation.
+
+When detailed KQL is explicitly requested, follow the query-link presentation in
 [kusto-query](../kusto-query/SKILL.md). Each query needs a clickable link to its
 verified cluster/database immediately above the code block, with Open query when
 available. Preserve these links in the draft returned to the adapter.
