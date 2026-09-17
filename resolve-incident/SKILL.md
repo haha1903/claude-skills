@@ -33,6 +33,7 @@ report them as requiring the separate operator workflow rather than silently ski
 3. Confirm against the current request/resource and runtime logs. Match region,
    environment and failing attempt. If the IcM names a Lionrock request, reuse
    [resolve-lionrock-request](../resolve-lionrock-request/SKILL.md) and its evidence.
+   For CIS-backed execution, use [cis-evidence](../cis-evidence/SKILL.md) to map the correct request flow to its full JobId and read bounded job/task snapshots. Match cloud and attempt, preserve reporting delay and unavailable reads, and keep missing runtime logs explicit. Snapshot state alone does not establish root cause or downstream fulfillment.
    For EV2 failures, read [rollout-status](../rollout-status/SKILL.md) and use
    `--tree --json` on the supplied rollout. Preserve the child rollout ID,
    resource/action, correlation ID, execution time and nested evidence source

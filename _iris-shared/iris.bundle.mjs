@@ -42225,10 +42225,10 @@ var require_dom_parser = __commonJS({
         defaultNSMap[""] = NAMESPACE.HTML;
       }
       defaultNSMap.xml = defaultNSMap.xml || NAMESPACE.XML;
-      var normalize2 = options.normalizeLineEndings || normalizeLineEndings;
+      var normalize3 = options.normalizeLineEndings || normalizeLineEndings;
       if (source && typeof source === "string") {
         sax2.parse(
-          normalize2(source),
+          normalize3(source),
           defaultNSMap,
           entityMap
         );
@@ -46639,8 +46639,8 @@ var require_resolve = __commonJS({
       }
       return count;
     }
-    function getFullPath(resolver, id = "", normalize2) {
-      if (normalize2 !== false)
+    function getFullPath(resolver, id = "", normalize3) {
+      if (normalize3 !== false)
         id = normalizeId(id);
       const p = resolver.parse(id);
       return _getFullPath(resolver, p);
@@ -48235,7 +48235,7 @@ var require_fast_uri = __commonJS({
       }
       return decodedScheme;
     }
-    function normalize2(uri, options) {
+    function normalize3(uri, options) {
       if (typeof uri === "string") {
         uri = /** @type {T} */
         normalizeString(uri, options);
@@ -48612,7 +48612,7 @@ var require_fast_uri = __commonJS({
     }
     var fastUri = {
       SCHEMES,
-      normalize: normalize2,
+      normalize: normalize3,
       resolve: resolve2,
       resolveComponent,
       equal,
@@ -73683,7 +73683,7 @@ async function getExecutionLogs(input, query = queryKusto) {
     tracing: { ...empty },
     gaps: []
   };
-  const read = async (kql, limit) => {
+  const read2 = async (kql, limit) => {
     try {
       const response = await query(options.cluster, options.database, kql, options.timeoutSeconds);
       const rows = response.rows.slice(0, limit);
@@ -73710,7 +73710,7 @@ async function getExecutionLogs(input, query = queryKusto) {
 | summarize MatchingRows=count(), First=min(PreciseTimeStamp), Last=max(PreciseTimeStamp) by ActivityId
 | order by First asc, ActivityId asc
 | take ${MAX_ACTIVITIES + 1}`;
-    result.discovery = await read(discoveryQuery, MAX_ACTIVITIES);
+    result.discovery = await read2(discoveryQuery, MAX_ACTIVITIES);
     result.activityIds = [...new Set(result.discovery.rows.map((row) => String(row.ActivityId)).filter(validActivity).map((id2) => id2.toLowerCase()))];
     if (result.discovery.status === "unavailable") result.gaps.push("Execution-to-ActivityId lookup is unavailable.");
     if (result.discovery.rowsTruncated) result.gaps.push("ActivityId discovery reached its limit. Some related activities were not queried.");
@@ -73734,13 +73734,138 @@ async function getExecutionLogs(input, query = queryKusto) {
 | project PreciseTimeStamp, DateTime, ActivityId, Operation, DiagnosticMatch,
  TraceMessage=substring(TraceMessage, 0, ${max}), Exception=substring(Exception, 0, ${max}),
  Body=substring(body, 0, ${max}), MessageTruncated=strlen(TraceMessage) > ${max} or strlen(Exception) > ${max} or strlen(body) > ${max}`;
-  [result.audit, result.tracing] = await Promise.all([read(auditQuery, options.maxRows), read(tracingQuery, options.maxRows)]);
+  [result.audit, result.tracing] = await Promise.all([read2(auditQuery, options.maxRows), read2(tracingQuery, options.maxRows)]);
   for (const [name4, source] of [["Audit", result.audit], ["Tracing", result.tracing]]) {
     if (source.status === "unavailable") result.gaps.push(`${name4} is unavailable. A failed read is not an empty result.`);
     if (source.status === "empty") result.gaps.push(`${name4} has no matching rows in this window. Check retention, reporting delay and a positive control before interpreting absence.`);
     if (source.rowsTruncated || source.messagesTruncated) result.gaps.push(`${name4} output is limited. Narrow the window or inspect the linked query for complete evidence.`);
   }
   return result;
+}
+
+// src/cis.ts
+var cis_exports = {};
+__export(cis_exports, {
+  getJobSnapshots: () => getJobSnapshots,
+  getRequestJobs: () => getRequestJobs
+});
+function bounded(value, min, max, name4) {
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${name4} must be an integer between ${min} and ${max}`);
+  }
+  return value;
+}
+function normalize2(input) {
+  if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(input.cloud)) throw new Error("Supply the verified CIS cloud name");
+  return {
+    ...input,
+    maxRows: bounded(input.maxRows ?? 60, 1, 200, "maxRows"),
+    timeoutSeconds: bounded(input.timeoutSeconds ?? 45, 1, 120, "timeoutSeconds")
+  };
+}
+async function read(options, kql, limit, query) {
+  try {
+    const response = await query(options.cluster, options.database, kql, options.timeoutSeconds);
+    const rows = response.rows.slice(0, limit);
+    return {
+      query: kql,
+      status: rows.length ? "ok" : "empty",
+      rows,
+      rowsTruncated: response.rows.length > limit,
+      messagesTruncated: rows.some((row) => row.MessageTruncated === true)
+    };
+  } catch (error2) {
+    return {
+      query: kql,
+      status: "unavailable",
+      rows: [],
+      rowsTruncated: false,
+      messagesTruncated: false,
+      error: String(error2 instanceof Error ? error2.message : error2).slice(0, 1500)
+    };
+  }
+}
+function gapsFor(name4, source) {
+  const gaps = [];
+  if (source.status === "unavailable") gaps.push(`${name4} is unavailable. A failed read is not an empty result.`);
+  if (source.status === "empty") gaps.push(`${name4} has no matching rows. Check the identifier, cloud, retention, time window and a positive control before interpreting absence.`);
+  if (source.rowsTruncated || source.messagesTruncated) gaps.push(`${name4} output is limited. Inspect the returned query or narrow the scope for complete evidence.`);
+  return gaps;
+}
+async function getRequestJobs(input, query = queryKusto) {
+  const options = normalize2(input);
+  if (!/^[1-9][0-9]{0,18}$/.test(input.requestId)) throw new Error("requestId must be the parent request number without a sub-request suffix");
+  if (input.kind !== "on-demand" && input.kind !== "planned-quota") throw new Error("kind must be on-demand or planned-quota");
+  if (input.subRequestId !== void 0) {
+    bounded(input.subRequestId, 1, 2147483647, "subRequestId");
+    if (input.kind !== "on-demand") throw new Error("subRequestId applies only to on-demand requests");
+  }
+  const id = JSON.stringify(input.requestId);
+  const kql = input.kind === "planned-quota" ? `PlannedQuotaRequestExecution() | where tostring(RequestId) == ${id}
+| project RequestId, JobId=CisJobId, JobType=CisJobType, Status, Region, ServiceTreeId, Blueprint, PlanVersion, CreatedTime, CompletedTime
+| order by CreatedTime desc, JobId asc | take ${options.maxRows + 1}` : `CisJob() | where ParentRequestId == ${id} and Cloud =~ ${JSON.stringify(input.cloud)}${input.subRequestId === void 0 ? "" : ` and SubRequestId == ${input.subRequestId}`}
+| project ParentRequestId, SubRequestId, JobId, Cloud, State, JobType, TaskId, TaskDisplayName, TaskState, CreatedTime, LastUpdatedTime, CompletedTime, IsArchived
+| order by CreatedTime desc, JobId asc, TaskId asc | take ${options.maxRows + 1}`;
+  const mapping = await read(options, kql, options.maxRows, query);
+  const gaps = gapsFor("Lionrock CIS mapping", mapping);
+  if (mapping.rows.some((row) => !row.JobId)) gaps.push("A matching request has no CIS JobId. This does not establish whether fulfillment was required or succeeded.");
+  if (input.kind === "planned-quota") gaps.push("The planned-quota mapping has no Cloud column. Verify the supplied cloud from the request or incident before reading CIS snapshots.");
+  return {
+    cluster: input.cluster,
+    database: input.database,
+    cloud: input.cloud,
+    queriedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    requestId: input.requestId,
+    kind: input.kind,
+    mapping,
+    gaps
+  };
+}
+async function getJobSnapshots(input, query = queryKusto) {
+  const options = normalize2(input);
+  if (!/^[0-9]{1,32}_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.jobId)) {
+    throw new Error("jobId must be the complete CIS job identifier including its numeric prefix");
+  }
+  const start = Date.parse(input.start);
+  const end = Date.parse(input.end);
+  if (![input.start, input.end].every((value) => /T.*(?:Z|[+-]\d\d:\d\d)$/.test(value)) || !Number.isFinite(start) || !Number.isFinite(end) || end <= start || end - start > 7 * 864e5) {
+    throw new Error("Use an absolute start/end time with a timezone and a window of at most seven days");
+  }
+  const messageLength = bounded(input.messageLength ?? 1e3, 100, 4e3, "messageLength");
+  const startTime = new Date(start).toISOString();
+  const endTime = new Date(end).toISOString();
+  const scope = `where Timestamp between (datetime(${startTime}) .. datetime(${endTime}))
+| where JobId == ${JSON.stringify(input.jobId)} and Cloud =~ ${JSON.stringify(input.cloud)}`;
+  const jobQuery = `JobSnapshot | ${scope}
+| order by Timestamp desc, IngestionTime desc | take 1
+| project JobId, Cloud, ParentId, RootId, Workflow, JobType, State, CustomState, CreatedDate, StartDate, FinishDate,
+ Timestamp, IngestionTime, ReportingDelaySeconds=(IngestionTime - Timestamp) / 1s, TotalTaskCount, FinishedTaskCount, BlockedTaskCount`;
+  const taskQuery = `TaskSnapshot | ${scope}
+| project JobId, Cloud, TaskId, TaskName, DisplayName, StateName, CustomState, CreatedDate, StartDate, FinishDate,
+ Timestamp, IngestionTime, LastBlockedReason
+| summarize arg_max(Timestamp, *) by Cloud, JobId, TaskId
+| order by Timestamp desc, TaskId asc | take ${options.maxRows + 1}
+| project JobId, Cloud, TaskId, TaskName, DisplayName, StateName, CustomState, CreatedDate, StartDate, FinishDate,
+ Timestamp, IngestionTime, ReportingDelaySeconds=(IngestionTime - Timestamp) / 1s,
+ LastBlockedReason=substring(LastBlockedReason, 0, ${messageLength}), MessageTruncated=strlen(LastBlockedReason) > ${messageLength}`;
+  const [job, tasks] = await Promise.all([read(options, jobQuery, 1, query), read(options, taskQuery, options.maxRows, query)]);
+  return {
+    cluster: input.cluster,
+    database: input.database,
+    cloud: input.cloud,
+    queriedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    jobId: input.jobId,
+    start: startTime,
+    end: endTime,
+    job,
+    tasks,
+    gaps: [
+      "Snapshots report state within this window and are not a complete transition or runtime log history. Later changes may exist.",
+      "CIS runtime logs were not queried. Snapshot state alone does not establish root cause or end-to-end fulfillment.",
+      ...gapsFor("JobSnapshot", job),
+      ...gapsFor("TaskSnapshot", tasks)
+    ]
+  };
 }
 
 // src/safefly.ts
@@ -74809,7 +74934,7 @@ function readConfig(url2, o) {
     req.on("error", reject);
   });
 }
-async function readMonitorConfigs(o, read = readConfig) {
+async function readMonitorConfigs(o, read2 = readConfig) {
   const stamp2 = new URL(o.stamp);
   if (stamp2.protocol !== "https:" || !stamp2.hostname.endsWith(".microsoftmetrics.com") || stamp2.username || stamp2.password || stamp2.search || stamp2.hash || stamp2.pathname !== "/" || stamp2.port) throw new Error("Use a public Geneva metrics HTTPS home stamp without a path or port");
   if (!o.account) throw new Error("Monitoring account is required");
@@ -74821,7 +74946,7 @@ async function readMonitorConfigs(o, read = readConfig) {
   const result = await Promise.all(Object.entries(paths).map(async ([kind, path10]) => {
     const url2 = new URL(path10, stamp2);
     try {
-      return [kind, { status: "ok", url: url2.href, data: await read(url2, o) }];
+      return [kind, { status: "ok", url: url2.href, data: await read2(url2, o) }];
     } catch (error2) {
       return [kind, { status: "unavailable", url: url2.href, error: String(error2).slice(0, 2e3) }];
     }
@@ -74864,6 +74989,7 @@ export {
   boards_exports as boards,
   bridge_exports as bridge,
   buildServerUrl,
+  cis_exports as cis,
   decodeHtml,
   escapeTeamsContent,
   ev2_exports as ev2,

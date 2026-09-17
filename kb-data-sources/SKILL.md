@@ -31,6 +31,7 @@ cheap; re-deriving a gotcha costs a day.
 | `betprod.westus2` / `BET` — billing meters, product onboarding | [betprod-bet-db.md](references/betprod-bet-db.md) |
 | MIX / azure-ratecard API — meter creation + tracking, PME auth | [mix-ratecard-api.md](references/mix-ratecard-api.md) |
 | `genevaactions` / `Production` — Geneva / ACIS execution logs | [geneva-logs.md](references/geneva-logs.md) |
+| `azcis` / `azcispub` — CIS job and task snapshots | [cis-snapshots.md](references/cis-snapshots.md) |
 | `kusto-query` helper CLI — the wrapper, not a source | [kusto-query-cli.md](references/kusto-query-cli.md) |
 
 For monitor configuration and metric series, use [geneva-metric-evidence](../geneva-metric-evidence/SKILL.md). Its Iris helper retains missing points, query diagnostics and configuration versions.

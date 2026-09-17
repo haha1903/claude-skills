@@ -34,6 +34,7 @@ export const boards = mod.boards;
 export const aigen = mod.aigen;
 export const geneva = mod.geneva;
 export const genevaLogs = mod.genevaLogs;
+export const cis = mod.cis;
 export const genevaMetrics = mod.genevaMetrics;
 export const safefly = mod.safefly;
 export const abh = mod.abh;
